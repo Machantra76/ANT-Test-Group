@@ -115,13 +115,13 @@
             <textarea id="messageText" rows="5" placeholder="វាយបញ្ចូលអត្ថបទសារ ឬការជូនដំណឹងនៅទីនេះ..."></textarea>
         </div>
 
-        <!-- 🟢 បន្ថែមសម្រាប់បញ្ចូល Image URL ផ្ញើរូបភាព -->
+        <!-- 🟢 ប្ដូរពី URL มาជា File Upload រូបភាព -->
         <div class="form-group">
-            <label>Link រូបភាព (Image URL - ជម្រើសបន្ថែម)៖</label>
-            <input type="url" id="imageUrl" placeholder="https://example.com/image.jpg">
+            <label>แนបឯកសាររូបភាព (Upload Image File)៖</label>
+            <input type="file" id="imageFile" accept="image/*">
         </div>
 
-        <!-- 🟢 បន្ថែមសម្រាប់ជ្រើសរើសពេលម៉ោងផ្ញើសារ -->
+        <!-- 🟢 កំណត់ពេលផ្ញើសារ -->
         <div class="form-group">
             <label>
                 <input type="checkbox" id="enableSchedule" onchange="toggleScheduleInput()" style="width: auto; margin-right: 5px;">
@@ -152,13 +152,13 @@
             const message = document.getElementById('messageText').value;
             const phone = document.getElementById('phoneNum').value;
             const lineId = document.getElementById('lineId').value;
-            const imageUrl = document.getElementById('imageUrl').value;
+            const imageFileInput = document.getElementById('imageFile');
             const isScheduled = document.getElementById('enableSchedule').checked;
             const scheduleTime = document.getElementById('scheduleTime').value;
             const statusBox = document.getElementById('statusBox');
 
-            if (!message.trim() && !imageUrl.trim()) {
-                alert("សូមបញ្ចូលអត្ថបទសារ ឬ Link រូបភាពជាមុនសិន!");
+            if (!message.trim() && imageFileInput.files.length === 0) {
+                alert("សូមបញ្ចូលអត្ថបទសារ ឬแนបរូបភាពជាមុនសិន!");
                 return;
             }
 
@@ -169,31 +169,36 @@
 
             statusBox.style.display = 'none';
 
-            let endpoint = '/api/notify/telegram';
-            let payload = { message, imageUrl };
-
-            if (channel === 'whatsapp') {
-                endpoint = '/api/notify/whatsapp';
-                payload = { phoneNumber: phone, message, imageUrl };
-            } else if (channel === 'line') {
-                endpoint = '/api/notify/line';
-                payload = { userId: lineId, message, imageUrl };
-            } else if (channel === 'broadcast') {
-                endpoint = '/api/notify/broadcast';
-                payload = { message, imageUrl, whatsappPhone: phone, lineUserId: lineId };
+            // ប្រើ FormData សម្រាប់ផ្ញើទាំង Text និង File ក្នុងពេលតែមួយ
+            const formData = new FormData();
+            formData.append('message', message);
+            if (phone) formData.append('phoneNumber', phone);
+            if (lineId) formData.append('userId', lineId);
+            if (imageFileInput.files[0]) {
+                formData.append('image', imageFileInput.files[0]);
+            }
+            if (isScheduled) {
+                formData.append('scheduleTime', scheduleTime);
             }
 
-            // បើមានការកំណត់ពេល (Schedule) យើងប្តូរ Endpoint ទៅកាន់កន្លែងរក្សាទុកកាលវិភាគ
+            let endpoint = '/api/notify/telegram';
+            if (channel === 'whatsapp') {
+                endpoint = '/api/notify/whatsapp';
+            } else if (channel === 'line') {
+                endpoint = '/api/notify/line';
+            } else if (channel === 'broadcast') {
+                endpoint = '/api/notify/broadcast';
+            }
+
             if (isScheduled) {
                 endpoint = '/api/notify/schedule';
-                payload = { channel, message, imageUrl, recipient: phone || lineId || 'default_telegram', scheduleTime };
+                formData.append('channel', channel);
             }
 
             try {
                 const response = await fetch(endpoint, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload)
+                    body: formData // ផ្ញើដោយមិនបាច់កំណត់ Content-Type header (Browser រៀបចំអូតូ)
                 });
 
                 const result = await response.json();

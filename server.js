@@ -2,6 +2,8 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
+const fs = require('fs');
+const multer = require('multer'); // 🟢 បន្ថែម multer សម្រាប់ Upload File
 const TelegramBot = require('node-telegram-bot-api');
 const line = require('@line/bot-sdk');
 const { Client, LocalAuth, MessageMedia } = require('whatsapp-web.js');
@@ -16,6 +18,17 @@ app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
+app.use('/uploads', express.static(path.join(__dirname, 'uploads'))); // បើកថត uploads ឱ្យສາມາດចូលមើលរូបភាពបាន
+
+// រៀបចំកន្លែងរក្សាទុករូបភាពដែល Upload ចូលមក
+if (!fs.existsSync('./uploads')) {
+    fs.mkdirSync('./uploads');
+}
+const storage = multer.diskStorage({
+    destination: (req, file, cb) => cb(null, './uploads/'),
+    filename: (req, file, cb) => cb(null, Date.now() + '-' + file.originalname)
+});
+const upload = multer({ storage: storage });
 
 // ==========================================
 // 🟢 POSTGRESQL DATABASE CONNECTION (Neon DB)
@@ -68,48 +81,20 @@ if (telegramToken && telegramToken !== 'YOUR_TELEGRAM_BOT_TOKEN_HERE') {
     console.log('⚠️ សូមកំណត់ TELEGRAM_BOT_TOKEN នៅក្នុង .env');
 }
 
-// ⏰ កំណត់ម៉ោងស្វ័យប្រវត្តិផ្ញើសារ
-cron.schedule('58 22 20 10 *', async () => {
-    console.log('⏰ កំពុងដំណើរការផ្ញើសារស្វ័យប្រវត្តិទៅ Telegram Group...');
-    const targetChatId = process.env.TELEGRAM_GROUP_CHAT_ID;
-
-    if (telegramBot && targetChatId) {
-        try {
-            await telegramBot.sendMessage(targetChatId, 'Hi', { parse_mode: 'HTML' });
-            await saveLog('Telegram', targetChatId, 'Hi', 'Success (Scheduled)');
-            console.log('📩 បានផ្ញើសារស្វ័យប្រវត្តិ "Hi" ចូល Group ដោយជោគជ័យ!');
-        } catch (err) {
-            await saveLog('Telegram', targetChatId, 'Hi', `Failed: ${err.message}`);
-            console.error('❌ កំហុសក្នុងការផ្ញើសារស្វ័យប្រវត្តិ:', err.message);
-        }
-    }
-}, {
-    scheduled: true,
-    timezone: "Asia/Phnom_Penh"
-});
-
 // ==========================================
-// ២. WHATSAPP WEB CLIENT INITIALIZATION (Render Optimized)
+// ២. WHATSAPP WEB CLIENT INITIALIZATION
 // ==========================================
 const whatsappClient = new Client({
     authStrategy: new LocalAuth(),
     puppeteer: {
         headless: true,
         executablePath: process.env.CHROME_PATH || undefined,
-        args: [
-            '--no-sandbox',
-            '--disable-setuid-sandbox',
-            '--disable-dev-shm-usage',
-            '--disable-accelerated-2d-canvas',
-            '--no-first-run',
-            '--no-zygote',
-            '--disable-gpu'
-        ]
+        args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu']
     }
 });
 
 whatsappClient.on('qr', (qr) => {
-    console.log('📲 សូមស្កេន QR Code ខាងក្រោមនៅលើ WhatsApp ទូរស័ព្ទរបស់អ្នក៖');
+    console.log('📲 សូមស្កេន QR Code នៅលើ WhatsApp៖');
     qrcode.generate(qr, { small: true });
 });
 
@@ -117,12 +102,8 @@ whatsappClient.on('ready', () => {
     console.log('✅ បានភ្ជាប់ទៅកាន់ WhatsApp Web Client រួចរាល់!');
 });
 
-whatsappClient.on('auth_failure', (msg) => {
-    console.error('❌ WhatsApp Authentication Failed:', msg);
-});
-
 whatsappClient.initialize().catch(err => {
-    console.error('⚠️ WhatsApp Client initialization warning/error:', err.message);
+    console.error('⚠️ WhatsApp Client initialization warning:', err.message);
 });
 
 // ==========================================
@@ -135,74 +116,76 @@ const lineConfig = {
 const lineClient = new line.Client(lineConfig);
 
 // ==========================================
-// API ROUTES
+// API ROUTES (គាំទ្រ File Upload)
 // ==========================================
 
-// ១. Telegram API (គាំទ្រទាំងអត្ថបទសារ និងរូបភាព)
-app.post('/api/notify/telegram', async (req, res) => {
-    const { chatId, message, imageUrl } = req.body;
+// ១. Telegram API
+app.post('/api/notify/telegram', upload.single('image'), async (req, res) => {
+    const { chatId, message } = req.body;
     const targetChatId = chatId || process.env.TELEGRAM_GROUP_CHAT_ID;
-
-    if (!telegramBot) {
-        return res.status(400).json({ success: false, error: 'Telegram Bot មិនទាន់ត្រូវបានរៀបចំទេ!' });
-    }
+    const file = req.file;
 
     try {
-        if (imageUrl) {
-            await telegramBot.sendPhoto(targetChatId, imageUrl, { caption: message, parse_mode: 'HTML' });
+        if (file) {
+            await telegramBot.sendPhoto(targetChatId, file.path, { caption: message || '', parse_mode: 'HTML' });
         } else {
-            await telegramBot.sendMessage(targetChatId, message, { parse_mode: 'HTML' });
+            await telegramBot.sendMessage(targetChatId, message || '', { parse_mode: 'HTML' });
         }
         await saveLog('Telegram', targetChatId, message || '[Photo]', 'Success');
-        res.json({ success: true, message: 'បានផ្ញើសារទៅ Telegram Group ដោយជោគជ័យ!' });
+        res.json({ success: true, message: 'បានផ្ញើសារទៅ Telegram ជោគជ័យ!' });
     } catch (err) {
         await saveLog('Telegram', targetChatId, message || '[Photo]', `Failed: ${err.message}`);
         res.status(500).json({ success: false, error: err.message });
     }
 });
 
-// ២. WhatsApp API (គាំទ្រទាំងអត្ថបទសារ និងរូបភាព)
-app.post('/api/notify/whatsapp', async (req, res) => {
-    const { phoneNumber, message, imageUrl } = req.body;
+// ២. WhatsApp API
+app.post('/api/notify/whatsapp', upload.single('image'), async (req, res) => {
+    const { phoneNumber, message } = req.body;
+    const file = req.file;
 
-    if (!phoneNumber || (!message && !imageUrl)) {
-        return res.status(400).json({ success: false, error: 'សូមបញ្ចូល លេខទូរស័ព្ទ និង អត្ថបទសារ ឬ Link រូបភាព!' });
+    if (!phoneNumber) {
+        return res.status(400).json({ success: false, error: 'សូមបញ្ចូលលេខទូរស័ព្ទ WhatsApp!' });
     }
 
     try {
         const cleanNumber = phoneNumber.replace(/[^0-9]/g, '');
         const formattedNumber = `${cleanNumber}@c.us`;
 
-        if (imageUrl) {
-            const media = await MessageMedia.fromUrl(imageUrl);
-            await whatsappClient.sendMessage(formattedNumber, media, { caption: message });
+        if (file) {
+            const media = MessageMedia.fromFilePath(file.path);
+            await whatsappClient.sendMessage(formattedNumber, media, { caption: message || '' });
         } else {
             await whatsappClient.sendMessage(formattedNumber, message);
         }
 
         await saveLog('WhatsApp', phoneNumber, message || '[Photo]', 'Success');
-        res.json({ success: true, message: 'បានផ្ញើសារទៅ WhatsApp ដោយជោគជ័យ!' });
+        res.json({ success: true, message: 'បានផ្ញើសារទៅ WhatsApp ជោគជ័យ!' });
     } catch (err) {
         await saveLog('WhatsApp', phoneNumber, message || '[Photo]', `Failed: ${err.message}`);
         res.status(500).json({ success: false, error: err.message });
     }
 });
 
-// ៣. LINE API (គាំទ្រទាំងអត្ថបទសារ និងរូបភាព)
-app.post('/api/notify/line', async (req, res) => {
-    const { userId, message, imageUrl } = req.body;
+// ៣. LINE API
+app.post('/api/notify/line', upload.single('image'), async (req, res) => {
+    const { userId, message } = req.body;
+    const file = req.file;
 
-    if (!userId || (!message && !imageUrl)) {
-        return res.status(400).json({ success: false, error: 'សូមបញ្ចូល LINE User ID និង អត្ថបទសារ ឬ Link រូបភាព!' });
+    if (!userId) {
+        return res.status(400).json({ success: false, error: 'សូមបញ្ចូល LINE User ID!' });
     }
 
     try {
         const messages = [];
-        if (imageUrl) {
+        if (file) {
+            // បញ្ជាក់៖ LINE ទាមទារ Public URL សម្រាប់រូបភាព ដូច្នេះយើងត្រូវប្រើ Render Domain ឬ URL របស់ Server
+            const baseUrl = `${req.protocol}://${req.get('host')}`;
+            const publicImageUrl = `${baseUrl}/uploads/${file.filename}`;
             messages.push({
                 type: 'image',
-                originalContentUrl: imageUrl,
-                previewImageUrl: imageUrl
+                originalContentUrl: publicImageUrl,
+                previewImageUrl: publicImageUrl
             });
         }
         if (message) {
@@ -211,30 +194,30 @@ app.post('/api/notify/line', async (req, res) => {
 
         await lineClient.pushMessage(userId, messages);
         await saveLog('LINE', userId, message || '[Photo]', 'Success');
-        res.json({ success: true, message: 'បានផ្ញើសារទៅ LINE ដោយជោគជ័យ!' });
+        res.json({ success: true, message: 'បានផ្ញើសារទៅ LINE ជោគជ័យ!' });
     } catch (err) {
         await saveLog('LINE', userId, message || '[Photo]', `Failed: ${err.message}`);
         res.status(500).json({ success: false, error: err.message });
     }
 });
 
-// ៤. Broadcast API (គាំទ្រគ្រប់ Channel ទាំងអស់)
-app.post('/api/notify/broadcast', async (req, res) => {
-    const { message, imageUrl, telegramChatId, whatsappPhone, lineUserId } = req.body;
+// ៤. Broadcast API
+app.post('/api/notify/broadcast', upload.single('image'), async (req, res) => {
+    const { message, whatsappPhone, lineUserId } = req.body;
+    const file = req.file;
     const status = {};
 
     if (telegramBot) {
-        const tChatId = telegramChatId || process.env.TELEGRAM_GROUP_CHAT_ID;
+        const tChatId = process.env.TELEGRAM_GROUP_CHAT_ID;
         try {
-            if (imageUrl) {
-                await telegramBot.sendPhoto(tChatId, imageUrl, { caption: message, parse_mode: 'HTML' });
+            if (file) {
+                await telegramBot.sendPhoto(tChatId, file.path, { caption: message || '', parse_mode: 'HTML' });
             } else {
-                await telegramBot.sendMessage(tChatId, message, { parse_mode: 'HTML' });
+                await telegramBot.sendMessage(tChatId, message || '', { parse_mode: 'HTML' });
             }
             await saveLog('Telegram (Broadcast)', tChatId, message || '[Photo]', 'Success');
-            status.telegram = 'ជោគជ័យ (Success)';
+            status.telegram = 'ជោគជ័យ';
         } catch (e) {
-            await saveLog('Telegram (Broadcast)', tChatId, message || '[Photo]', `Failed: ${e.message}`);
             status.telegram = `បរាជ័យ: ${e.message}`;
         }
     }
@@ -242,17 +225,15 @@ app.post('/api/notify/broadcast', async (req, res) => {
     if (whatsappPhone) {
         try {
             const cleanNumber = whatsappPhone.replace(/[^0-9]/g, '');
-            const formattedNumber = `${cleanNumber}@c.us`;
-            if (imageUrl) {
-                const media = await MessageMedia.fromUrl(imageUrl);
-                await whatsappClient.sendMessage(formattedNumber, media, { caption: message });
+            if (file) {
+                const media = MessageMedia.fromFilePath(file.path);
+                await whatsappClient.sendMessage(`${cleanNumber}@c.us`, media, { caption: message || '' });
             } else {
-                await whatsappClient.sendMessage(formattedNumber, message);
+                await whatsappClient.sendMessage(`${cleanNumber}@c.us`, message);
             }
             await saveLog('WhatsApp (Broadcast)', whatsappPhone, message || '[Photo]', 'Success');
-            status.whatsapp = 'ជោគជ័យ (Success)';
+            status.whatsapp = 'ជោគជ័យ';
         } catch (e) {
-            await saveLog('WhatsApp (Broadcast)', whatsappPhone, message || '[Photo]', `Failed: ${e.message}`);
             status.whatsapp = `បរាជ័យ: ${e.message}`;
         }
     }
@@ -260,21 +241,17 @@ app.post('/api/notify/broadcast', async (req, res) => {
     if (lineUserId && lineConfig.channelAccessToken) {
         try {
             const messages = [];
-            if (imageUrl) {
-                messages.push({
-                    type: 'image',
-                    originalContentUrl: imageUrl,
-                    previewImageUrl: imageUrl
-                });
+            if (file) {
+                const baseUrl = `${req.protocol}://${req.get('host')}`;
+                const publicImageUrl = `${baseUrl}/uploads/${file.filename}`;
+                messages.push({ type: 'image', originalContentUrl: publicImageUrl, previewImageUrl: publicImageUrl });
             }
-            if (message) {
-                messages.push({ type: 'text', text: message });
-            }
+            if (message) messages.push({ type: 'text', text: message });
+
             await lineClient.pushMessage(lineUserId, messages);
             await saveLog('LINE (Broadcast)', lineUserId, message || '[Photo]', 'Success');
-            status.line = 'ជោគជ័យ (Success)';
+            status.line = 'ជោគជ័យ';
         } catch (e) {
-            await saveLog('LINE (Broadcast)', lineUserId, message || '[Photo]', `Failed: ${e.message}`);
             status.line = `បរាជ័យ: ${e.message}`;
         }
     }
@@ -282,12 +259,14 @@ app.post('/api/notify/broadcast', async (req, res) => {
     res.json({ success: true, status });
 });
 
-// ៥. API រក្សាទុកកាលវិភាគផ្ញើសារ (Schedule Notification API)
-app.post('/api/notify/schedule', async (req, res) => {
-    const { channel, message, imageUrl, recipient, scheduleTime } = req.body;
+// ៥. API រក្សាទុកកាលវិភាគ
+app.post('/api/notify/schedule', upload.single('image'), async (req, res) => {
+    const { channel, message, scheduleTime, phoneNumber, userId } = req.body;
+    const file = req.file;
+    const recipient = phoneNumber || userId || process.env.TELEGRAM_GROUP_CHAT_ID;
 
-    if ((!message && !imageUrl) || !scheduleTime) {
-        return res.status(400).json({ success: false, error: 'សូមបញ្ជាក់អត្ថបទសារ/រូបភាព និងពេលវេលា!' });
+    if ((!message && !file) || !scheduleTime) {
+        return res.status(400).json({ success: false, error: 'សូមបញ្ជាក់សារ/រូបភាព និងពេលវេលា!' });
     }
 
     try {
@@ -297,7 +276,7 @@ app.post('/api/notify/schedule', async (req, res) => {
                 channel VARCHAR(50),
                 recipient TEXT,
                 message TEXT,
-                image_url TEXT,
+                image_path TEXT,
                 schedule_time TIMESTAMP,
                 status VARCHAR(50) DEFAULT 'Pending',
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -305,18 +284,17 @@ app.post('/api/notify/schedule', async (req, res) => {
         );
 
         await pool.query(
-            'INSERT INTO scheduled_messages (channel, recipient, message, image_url, schedule_time) VALUES ($1, $2, $3, $4, $5)',
-            [channel, recipient, message, imageUrl, scheduleTime]
+            'INSERT INTO scheduled_messages (channel, recipient, message, image_path, schedule_time) VALUES ($1, $2, $3, $4, $5)',
+            [channel, recipient, message || '', file ? file.path : null, scheduleTime]
         );
 
         res.json({ success: true, message: `បានកំណត់ពេលផ្ញើសារសម្រាប់ថ្ងៃទី ${scheduleTime} ជោគជ័យ!` });
     } catch (err) {
-        console.error('Error scheduling message:', err);
         res.status(500).json({ success: false, error: err.message });
     }
 });
 
-// ៦. API ទាញយកប្រវត្តិការផ្ញើសារ (Get Logs from DB)
+// ៦. API ទាញយក Logs
 app.get('/api/logs', async (req, res) => {
     try {
         const result = await pool.query('SELECT * FROM notification_logs ORDER BY created_at DESC LIMIT 50');
@@ -326,7 +304,6 @@ app.get('/api/logs', async (req, res) => {
     }
 });
 
-// Route បើកទំព័រ UI ដើម
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });

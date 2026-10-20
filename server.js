@@ -173,6 +173,39 @@ app.post('/api/notify/whatsapp', async (req, res) => {
         res.status(500).json({ success: false, error: err.message });
     }
 });
+// 🟢 API រក្សាទុកកាលវិភាគផ្ញើសារ (Schedule Notification API)
+app.post('/api/notify/schedule', async (req, res) => {
+    const { channel, message, recipient, scheduleTime } = req.body;
+
+    if (!message || !scheduleTime) {
+        return res.status(400).json({ success: false, error: 'សូមបញ្ជាក់អត្ថបទសារ និងពេលវេលា!' });
+    }
+
+    try {
+        // រក្សាទុកចូលក្នុង Database (អ្នកអាចបង្កើត Table ថ្មីឈ្មោះ scheduled_messages)
+        await pool.query(
+            `CREATE TABLE IF NOT EXISTS scheduled_messages (
+                id SERIAL PRIMARY KEY,
+                channel VARCHAR(50),
+                recipient TEXT,
+                message TEXT,
+                schedule_time TIMESTAMP,
+                status VARCHAR(50) DEFAULT 'Pending',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )`
+        );
+
+        await pool.query(
+            'INSERT INTO scheduled_messages (channel, recipient, message, schedule_time) VALUES ($1, $2, $3, $4)',
+            [channel, recipient, message, scheduleTime]
+        );
+
+        res.json({ success: true, message: `បានកំណត់ពេលផ្ញើសារសម្រាប់ថ្ងៃទី ${scheduleTime} ជោគជ័យ!` });
+    } catch (err) {
+        console.error('Error scheduling message:', err);
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
 
 app.post('/api/notify/line', async (req, res) => {
     const { userId, message } = req.body;

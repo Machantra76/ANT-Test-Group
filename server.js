@@ -25,7 +25,6 @@ const pool = new Pool({
     ssl: { rejectUnauthorized: false }
 });
 
-// បង្កើត Table សម្រាប់រក្សាទុកប្រវត្តិការផ្ញើសារ (Logs)
 async function initDatabase() {
     try {
         await pool.query(`
@@ -45,7 +44,6 @@ async function initDatabase() {
 }
 initDatabase();
 
-// Function ជួយບັນទឹករាល់ Log នៃការផ្ញើសារចូល Database
 async function saveLog(channel, recipient, message, status) {
     try {
         await pool.query(
@@ -66,24 +64,16 @@ let telegramBot = null;
 if (telegramToken && telegramToken !== 'YOUR_TELEGRAM_BOT_TOKEN_HERE') {
     telegramBot = new TelegramBot(telegramToken, { polling: true });
     console.log('✅ បានភ្ជាប់ទៅកាន់ Telegram Bot ដោយជោគជ័យ!');
-
-    telegramBot.on('message', (msg) => {
-        const chatId = msg.chat.id;
-        const chatTitle = msg.chat.title || 'Private Chat';
-        console.log(`Telegram Notification - Chat ID: ${chatId} | Title/Name: "${chatTitle}"`);
-    });
 } else {
     console.log('⚠️ សូមកំណត់ TELEGRAM_BOT_TOKEN នៅក្នុង .env');
 }
 
-// ==========================================
-// ⏰ កំណត់ម៉ោងស្វ័យប្រវត្តិផ្ញើសារ (ថ្ងៃទី 20-10-2026 ម៉ោង 22:58)
-// ==========================================
+// ⏰ កំណត់ម៉ោងស្វ័យប្រវត្តិផ្ញើសារ
 cron.schedule('58 22 20 10 *', async () => {
     console.log('⏰ កំពុងដំណើរការផ្ញើសារស្វ័យប្រវត្តិទៅ Telegram Group...');
     const targetChatId = process.env.TELEGRAM_GROUP_CHAT_ID;
 
-    if (telegramBot && targetChatId && targetChatId !== '-100XXXXXXXXXX') {
+    if (telegramBot && targetChatId) {
         try {
             await telegramBot.sendMessage(targetChatId, 'Hi', { parse_mode: 'HTML' });
             await saveLog('Telegram', targetChatId, 'Hi', 'Success (Scheduled)');
@@ -92,8 +82,6 @@ cron.schedule('58 22 20 10 *', async () => {
             await saveLog('Telegram', targetChatId, 'Hi', `Failed: ${err.message}`);
             console.error('❌ កំហុសក្នុងការផ្ញើសារស្វ័យប្រវត្តិ:', err.message);
         }
-    } else {
-        console.log('⚠️ Telegram Bot ឬ Group Chat ID មិនទាន់ត្រឹមត្រូវ!');
     }
 }, {
     scheduled: true,
@@ -101,10 +89,23 @@ cron.schedule('58 22 20 10 *', async () => {
 });
 
 // ==========================================
-// ២. WHATSAPP WEB CLIENT INITIALIZATION
+// ២. WHATSAPP WEB CLIENT INITIALIZATION (Render Optimized)
 // ==========================================
 const whatsappClient = new Client({
-    authStrategy: new LocalAuth()
+    authStrategy: new LocalAuth(),
+    puppeteer: {
+        headless: true,
+        executablePath: process.env.CHROME_PATH || undefined, // អនុញ្ញាតឱ្យអានពី Render System បើមាន
+        args: [
+            '--no-sandbox',
+            '--disable-setuid-sandbox',
+            '--disable-dev-shm-usage',
+            '--disable-accelerated-2d-canvas',
+            '--no-first-run',
+            '--no-zygote',
+            '--disable-gpu'
+        ]
+    }
 });
 
 whatsappClient.on('qr', (qr) => {
@@ -116,10 +117,16 @@ whatsappClient.on('ready', () => {
     console.log('✅ បានភ្ជាប់ទៅកាន់ WhatsApp Web Client រួចរាល់!');
 });
 
-whatsappClient.initialize();
+whatsappClient.on('auth_failure', (msg) => {
+    console.error('❌ WhatsApp Authentication Failed:', msg);
+});
+
+whatsappClient.initialize().catch(err => {
+    console.error('⚠️ WhatsApp Client initialization warning/error:', err.message);
+});
 
 // ==========================================
-// 3. LINE BOT INITIALIZATION
+// ៣. LINE BOT INITIALIZATION
 // ==========================================
 const lineConfig = {
     channelAccessToken: process.env.LINE_CHANNEL_ACCESS_TOKEN || '',
@@ -130,14 +137,12 @@ const lineClient = new line.Client(lineConfig);
 // ==========================================
 // API ROUTES
 // ==========================================
-
-// ១. Telegram API
 app.post('/api/notify/telegram', async (req, res) => {
     const { chatId, message } = req.body;
     const targetChatId = chatId || process.env.TELEGRAM_GROUP_CHAT_ID;
 
     if (!telegramBot) {
-        return res.status(400).json({ success: false, error: 'Telegram Bot មិនទាន់ត្រូវបានរៀបចំក្នុង .env ទេ!' });
+        return res.status(400).json({ success: false, error: 'Telegram Bot មិនទាន់ត្រូវបានរៀបចំទេ!' });
     }
 
     try {
@@ -146,12 +151,10 @@ app.post('/api/notify/telegram', async (req, res) => {
         res.json({ success: true, message: 'បានផ្ញើសារទៅ Telegram Group ដោយជោគជ័យ!' });
     } catch (err) {
         await saveLog('Telegram', targetChatId, message, `Failed: ${err.message}`);
-        console.error('Error sending Telegram message:', err);
         res.status(500).json({ success: false, error: err.message });
     }
 });
 
-// ២. WhatsApp API
 app.post('/api/notify/whatsapp', async (req, res) => {
     const { phoneNumber, message } = req.body;
 
@@ -167,12 +170,10 @@ app.post('/api/notify/whatsapp', async (req, res) => {
         res.json({ success: true, message: 'បានផ្ញើសារទៅ WhatsApp ដោយជោគជ័យ!' });
     } catch (err) {
         await saveLog('WhatsApp', phoneNumber, message, `Failed: ${err.message}`);
-        console.error('Error sending WhatsApp message:', err);
         res.status(500).json({ success: false, error: err.message });
     }
 });
 
-// ៣. LINE API
 app.post('/api/notify/line', async (req, res) => {
     const { userId, message } = req.body;
 
@@ -186,55 +187,10 @@ app.post('/api/notify/line', async (req, res) => {
         res.json({ success: true, message: 'បានផ្ញើសារទៅ LINE ដោយជោគជ័យ!' });
     } catch (err) {
         await saveLog('LINE', userId, message, `Failed: ${err.message}`);
-        console.error('Error sending LINE message:', err);
         res.status(500).json({ success: false, error: err.message });
     }
 });
 
-// ៤. Broadcast API
-app.post('/api/notify/broadcast', async (req, res) => {
-    const { message, telegramChatId, whatsappPhone, lineUserId } = req.body;
-    const status = {};
-
-    if (telegramBot) {
-        const tChatId = telegramChatId || process.env.TELEGRAM_GROUP_CHAT_ID;
-        try {
-            await telegramBot.sendMessage(tChatId, message, { parse_mode: 'HTML' });
-            await saveLog('Telegram (Broadcast)', tChatId, message, 'Success');
-            status.telegram = 'ជោគជ័យ (Success)';
-        } catch (e) {
-            await saveLog('Telegram (Broadcast)', tChatId, message, `Failed: ${e.message}`);
-            status.telegram = `បរាជ័យ: ${e.message}`;
-        }
-    }
-
-    if (whatsappPhone) {
-        try {
-            const cleanNumber = whatsappPhone.replace(/[^0-9]/g, '');
-            await whatsappClient.sendMessage(`${cleanNumber}@c.us`, message);
-            await saveLog('WhatsApp (Broadcast)', whatsappPhone, message, 'Success');
-            status.whatsapp = 'ជោគជ័យ (Success)';
-        } catch (e) {
-            await saveLog('WhatsApp (Broadcast)', whatsappPhone, message, `Failed: ${e.message}`);
-            status.whatsapp = `បរាជ័យ: ${e.message}`;
-        }
-    }
-
-    if (lineUserId && lineConfig.channelAccessToken) {
-        try {
-            await lineClient.pushMessage(lineUserId, { type: 'text', text: message });
-            await saveLog('LINE (Broadcast)', lineUserId, message, 'Success');
-            status.line = 'ជោគជ័យ (Success)';
-        } catch (e) {
-            await saveLog('LINE (Broadcast)', lineUserId, message, `Failed: ${e.message}`);
-            status.line = `បរាជ័យ: ${e.message}`;
-        }
-    }
-
-    res.json({ success: true, status });
-});
-
-// 🟢 ៥. API ទាញយកប្រវត្តិការផ្ញើសារ (Get Logs from DB)
 app.get('/api/logs', async (req, res) => {
     try {
         const result = await pool.query('SELECT * FROM notification_logs ORDER BY created_at DESC LIMIT 50');
@@ -244,7 +200,6 @@ app.get('/api/logs', async (req, res) => {
     }
 });
 
-// Route បើកទំព័រ UI ដើម
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });

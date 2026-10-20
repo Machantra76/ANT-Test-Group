@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="km">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ប្រព័ន្ធគ្រប់គ្រងការជូនដំណឹង - Multi-Channel Notification Hub</title>
+    <link href="https://fonts.googleapis.com/css2?family=Kantumruy+Pro:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        body {
+            font-family: 'Kantumruy Pro', sans-serif;
+            background-color: #f0f4f8;
+            margin: 0;
+            padding: 0;
+            color: #333;
+        }
+        header {
+            background: linear-gradient(135deg, #1e3c72, #2a5298);
+            color: white;
+            padding: 20px;
+            text-align: center;
+        }
+        .container {
+            max-width: 800px;
+            margin: 30px auto;
+            background: white;
+            padding: 25px;
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        }
+        .form-group {
+            margin-bottom: 20px;
+        }
+        label {
+            display: block;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+        input, textarea, select {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+            font-family: 'Kantumruy Pro', sans-serif;
+            box-sizing: border-box;
+        }
+        .btn {
+            background: #10b981;
+            color: white;
+            border: none;
+            padding: 12px 20px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 600;
+            width: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+        }
+        .btn:hover {
+            background: #059669;
+        }
+        .status-box {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 6px;
+            display: none;
+        }
+        .status-success {
+            background: #d1fae5;
+            color: #065f46;
+            border: 1px solid #a7f3d0;
+        }
+        .status-error {
+            background: #fee2e2;
+            color: #991b1b;
+            border: 1px solid #fca5a5;
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <h1 style="margin: 0; font-size: 22px;">📢 Multi-Channel Notification Hub</h1>
+        <p style="margin: 5px 0 0 0; opacity: 0.9;">ប្រព័ន្ធផ្ញើសារជូនដំណឹងទៅកាន់ Telegram, WhatsApp, & LINE</p>
+    </header>
+
+    <div class="container">
+        <h2>ផ្ញើសារជូនដំណឹង (Send Notification)</h2>
+        
+        <div class="form-group">
+            <label>ជ្រើសរើស Channel ត្រូវផ្ញើ៖</label>
+            <select id="channelSelect" onchange="toggleInputs()">
+                <option value="telegram">Telegram Group ("បងៗ អាណាធាក់កម្ពុជាឈ្នះៗ")</option>
+                <option value="whatsapp">WhatsApp</option>
+                <option value="line">LINE</option>
+                <option value="broadcast"> broadcast គ្រប់ Channel ទាំងអស់</option>
+            </select>
+        </div>
+
+        <div class="form-group" id="whatsappInput" style="display: none;">
+            <label>លេខទូរស័ព្ទ WhatsApp (ឧទាហរណ៍៖ 85512345678)៖</label>
+            <input type="text" id="phoneNum" placeholder="85512345678">
+        </div>
+
+        <div class="form-group" id="lineInput" style="display: none;">
+            <label>LINE User ID / Group ID៖</label>
+            <input type="text" id="lineId" placeholder="U1234567890abcdef...">
+        </div>
+
+        <div class="form-group">
+            <label>អត្ថបទសារ (Message)៖</label>
+            <textarea id="messageText" rows="6" placeholder="វាយបញ្ចូលអត្ថបទសារ ឬការជូនដំណឹងនៅទីនេះ..."></textarea>
+        </div>
+
+        <button class="btn" onclick="sendNotification()"><i class="fa-solid fa-paper-plane"></i> បញ្ជូនសារឥឡូវនេះ</button>
+
+        <div id="statusBox" class="status-box"></div>
+    </div>
+
+    <script>
+        function toggleInputs() {
+            const channel = document.getElementById('channelSelect').value;
+            document.getElementById('whatsappInput').style.display = (channel === 'whatsapp' || channel === 'broadcast') ? 'block' : 'none';
+            document.getElementById('lineInput').style.display = (channel === 'line' || channel === 'broadcast') ? 'block' : 'none';
+        }
+
+        async function sendNotification() {
+            const channel = document.getElementById('channelSelect').value;
+            const message = document.getElementById('messageText').value;
+            const phone = document.getElementById('phoneNum').value;
+            const lineId = document.getElementById('lineId').value;
+            const statusBox = document.getElementById('statusBox');
+
+            if (!message.trim()) {
+                alert("សូមបញ្ចូលអត្ថបទសារជាមុនសិន!");
+                return;
+            }
+
+            statusBox.style.display = 'none';
+
+            let endpoint = '/api/notify/telegram';
+            let payload = { message };
+
+            if (channel === 'whatsapp') {
+                endpoint = '/api/notify/whatsapp';
+                payload = { phoneNumber: phone, message };
+            } else if (channel === 'line') {
+                endpoint = '/api/notify/line';
+                payload = { userId: lineId, message };
+            } else if (channel === 'broadcast') {
+                endpoint = '/api/notify/broadcast';
+                payload = { message, whatsappPhone: phone, lineUserId: lineId };
+            }
+
+            try {
+                const response = await fetch(endpoint, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                const result = await response.json();
+                statusBox.style.display = 'block';
+
+                if (response.ok && result.success) {
+                    statusBox.className = 'status-box status-success';
+                    statusBox.innerHTML = `✅ <b>ជោគជ័យ៖</b> ${result.message || 'បានផ្ញើសាររួចរាល់!'}`;
+                } else {
+                    statusBox.className = 'status-box status-error';
+                    statusBox.innerHTML = `❌ <b>កំហុស៖</b> ${result.error || 'មិនអាចផ្ញើសារបានទេ'}`;
+                }
+            } catch (err) {
+                statusBox.style.display = 'block';
+                statusBox.className = 'status-box status-error';
+                statusBox.innerHTML = `❌ <b>កំហុសភ្ជាប់ប្រព័ន្ធ៖</b> ${err.message}`;
+            }
+        }
+    </script>
+</body>
+</html>

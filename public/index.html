@@ -96,7 +96,7 @@
                 <option value="telegram">Telegram Group ("បងៗ អាណាធាក់កម្ពុជាឈ្នះៗ")</option>
                 <option value="whatsapp">WhatsApp</option>
                 <option value="line">LINE</option>
-                <option value="broadcast"> broadcast គ្រប់ Channel ទាំងអស់</option>
+                <option value="broadcast">Broadcast គ្រប់ Channel ទាំងអស់</option>
             </select>
         </div>
 
@@ -112,10 +112,19 @@
 
         <div class="form-group">
             <label>អត្ថបទសារ (Message)៖</label>
-            <textarea id="messageText" rows="6" placeholder="វាយបញ្ចូលអត្ថបទសារ ឬការជូនដំណឹងនៅទីនេះ..."></textarea>
+            <textarea id="messageText" rows="5" placeholder="វាយបញ្ចូលអត្ថបទសារ ឬការជូនដំណឹងនៅទីនេះ..."></textarea>
         </div>
 
-        <button class="btn" onclick="sendNotification()"><i class="fa-solid fa-paper-plane"></i> បញ្ជូនសារឥឡូវនេះ</button>
+        <!-- 🟢 បន្ថែមសម្រាប់ជ្រើសរើសពេលម៉ោងផ្ញើសារ -->
+        <div class="form-group">
+            <label>
+                <input type="checkbox" id="enableSchedule" onchange="toggleScheduleInput()" style="width: auto; margin-right: 5px;">
+                កំណត់ពេលផ្ញើសារស្វ័យប្រវត្តិ (Schedule Time)
+            </label>
+            <input type="datetime-local" id="scheduleTime" style="display: none; margin-top: 10px;">
+        </div>
+
+        <button class="btn" onclick="sendNotification()"><i class="fa-solid fa-paper-plane"></i> បញ្ជូនសារ</button>
 
         <div id="statusBox" class="status-box"></div>
     </div>
@@ -127,15 +136,27 @@
             document.getElementById('lineInput').style.display = (channel === 'line' || channel === 'broadcast') ? 'block' : 'none';
         }
 
+        function toggleScheduleInput() {
+            const isChecked = document.getElementById('enableSchedule').checked;
+            document.getElementById('scheduleTime').style.display = isChecked ? 'block' : 'none';
+        }
+
         async function sendNotification() {
             const channel = document.getElementById('channelSelect').value;
             const message = document.getElementById('messageText').value;
             const phone = document.getElementById('phoneNum').value;
             const lineId = document.getElementById('lineId').value;
+            const isScheduled = document.getElementById('enableSchedule').checked;
+            const scheduleTime = document.getElementById('scheduleTime').value;
             const statusBox = document.getElementById('statusBox');
 
             if (!message.trim()) {
                 alert("សូមបញ្ចូលអត្ថបទសារជាមុនសិន!");
+                return;
+            }
+
+            if (isScheduled && !scheduleTime) {
+                alert("សូមជ្រើសរើសពេលវេលាដែលត្រូវផ្ញើ!");
                 return;
             }
 
@@ -155,6 +176,12 @@
                 payload = { message, whatsappPhone: phone, lineUserId: lineId };
             }
 
+            // បើមានការកំណត់ពេល (Schedule) យើងប្តូរ Endpoint ទៅកាន់កន្លែងរក្សាទុកកាលវិភាគ
+            if (isScheduled) {
+                endpoint = '/api/notify/schedule';
+                payload = { channel, message, recipient: phone || lineId || 'default_telegram', scheduleTime };
+            }
+
             try {
                 const response = await fetch(endpoint, {
                     method: 'POST',
@@ -167,7 +194,7 @@
 
                 if (response.ok && result.success) {
                     statusBox.className = 'status-box status-success';
-                    statusBox.innerHTML = `✅ <b>ជោគជ័យ៖</b> ${result.message || 'បានផ្ញើសាររួចរាល់!'}`;
+                    statusBox.innerHTML = `✅ <b>ជោគជ័យ៖</b> ${result.message || 'បានកំណត់ពេលផ្ញើសាររួចរាល់!'}`;
                 } else {
                     statusBox.className = 'status-box status-error';
                     statusBox.innerHTML = `❌ <b>កំហុស៖</b> ${result.error || 'មិនអាចផ្ញើសារបានទេ'}`;

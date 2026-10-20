@@ -115,6 +115,12 @@
             <textarea id="messageText" rows="5" placeholder="វាយបញ្ចូលអត្ថបទសារ ឬការជូនដំណឹងនៅទីនេះ..."></textarea>
         </div>
 
+        <!-- 🟢 បន្ថែមសម្រាប់បញ្ចូល Image URL ផ្ញើរូបភាព -->
+        <div class="form-group">
+            <label>Link រូបភាព (Image URL - ជម្រើសបន្ថែម)៖</label>
+            <input type="url" id="imageUrl" placeholder="https://example.com/image.jpg">
+        </div>
+
         <!-- 🟢 បន្ថែមសម្រាប់ជ្រើសរើសពេលម៉ោងផ្ញើសារ -->
         <div class="form-group">
             <label>
@@ -146,12 +152,13 @@
             const message = document.getElementById('messageText').value;
             const phone = document.getElementById('phoneNum').value;
             const lineId = document.getElementById('lineId').value;
+            const imageUrl = document.getElementById('imageUrl').value;
             const isScheduled = document.getElementById('enableSchedule').checked;
             const scheduleTime = document.getElementById('scheduleTime').value;
             const statusBox = document.getElementById('statusBox');
 
-            if (!message.trim()) {
-                alert("សូមបញ្ចូលអត្ថបទសារជាមុនសិន!");
+            if (!message.trim() && !imageUrl.trim()) {
+                alert("សូមបញ្ចូលអត្ថបទសារ ឬ Link រូបភាពជាមុនសិន!");
                 return;
             }
 
@@ -163,23 +170,23 @@
             statusBox.style.display = 'none';
 
             let endpoint = '/api/notify/telegram';
-            let payload = { message };
+            let payload = { message, imageUrl };
 
             if (channel === 'whatsapp') {
                 endpoint = '/api/notify/whatsapp';
-                payload = { phoneNumber: phone, message };
+                payload = { phoneNumber: phone, message, imageUrl };
             } else if (channel === 'line') {
                 endpoint = '/api/notify/line';
-                payload = { userId: lineId, message };
+                payload = { userId: lineId, message, imageUrl };
             } else if (channel === 'broadcast') {
                 endpoint = '/api/notify/broadcast';
-                payload = { message, whatsappPhone: phone, lineUserId: lineId };
+                payload = { message, imageUrl, whatsappPhone: phone, lineUserId: lineId };
             }
 
             // បើមានការកំណត់ពេល (Schedule) យើងប្តូរ Endpoint ទៅកាន់កន្លែងរក្សាទុកកាលវិភាគ
             if (isScheduled) {
                 endpoint = '/api/notify/schedule';
-                payload = { channel, message, recipient: phone || lineId || 'default_telegram', scheduleTime };
+                payload = { channel, message, imageUrl, recipient: phone || lineId || 'default_telegram', scheduleTime };
             }
 
             try {
@@ -194,7 +201,7 @@
 
                 if (response.ok && result.success) {
                     statusBox.className = 'status-box status-success';
-                    statusBox.innerHTML = `✅ <b>ជោគជ័យ៖</b> ${result.message || 'បានកំណត់ពេលផ្ញើសាររួចរាល់!'}`;
+                    statusBox.innerHTML = `✅ <b>ជោគជ័យ៖</b> ${result.message || 'បានផ្ញើសាររួចរាល់!'}`;
                 } else {
                     statusBox.className = 'status-box status-error';
                     statusBox.innerHTML = `❌ <b>កំហុស៖</b> ${result.error || 'មិនអាចផ្ញើសារបានទេ'}`;

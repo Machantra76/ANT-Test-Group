@@ -116,10 +116,7 @@ const lineConfig = {
 const lineClient = new line.Client(lineConfig);
 
 // ==========================================
-// ⏰ CRON WORKER រៀងរាល់ ១ នាទីម្តង (សម្រាប់ផ្ញើសារតាមកាលវិភាគ)
-// ==========================================
-// ==========================================
-// ⏰ CRON WORKER រៀងរាល់ ១ នាទីម្តង (ផ្ញើសារតាមកាលវិភាគ - កែសម្រួល Timezone ស្របតាមកម្ពុជា)
+// ⏰ CRON WORKER រៀងរាល់ ១ នាទីម្តង (ផ្ញើសារតាមកាលវិភាគ - កែសម្រួលថ្មីឱ្យងាយស្រួលអាន)
 // ==========================================
 cron.schedule('* * * * *', async () => {
     try {
@@ -136,10 +133,9 @@ cron.schedule('* * * * *', async () => {
             )`
         );
 
-        // បម្លែងម៉ោងបច្ចុប្បន្នឱ្យត្រូវនឹងម៉ោងក្នុងតំបន់ ភ្នំពេញ (Asia/Phnom_Penh)
+        // ดึงទិន្នន័យដែលដល់ម៉ោង ដោយប្រៀបធៀបជាមួយ NOW() ដោយផ្ទាល់
         const result = await pool.query(
-            `SELECT * FROM scheduled_messages 
-             WHERE schedule_time <= (NOW() AT TIME ZONE 'Asia/Phnom_Penh') AND status = 'Pending'`
+            `SELECT * FROM scheduled_messages WHERE schedule_time <= NOW() AND status = 'Pending'`
         );
 
         const pendingMessages = result.rows;
@@ -336,7 +332,7 @@ app.post('/api/notify/broadcast', upload.single('image'), async (req, res) => {
     res.json({ success: true, status });
 });
 
-// ៥. API រក្សាទុកកាលវិភាគ
+// ៥. API រក្សាទុកកាលវិភាគ (កែសម្រួល Date Parsing ឱ្យត្រឹមត្រូវ)
 app.post('/api/notify/schedule', upload.single('image'), async (req, res) => {
     const { channel, message, scheduleTime, phoneNumber, userId } = req.body;
     const file = req.file;
@@ -360,9 +356,12 @@ app.post('/api/notify/schedule', upload.single('image'), async (req, res) => {
             )`
         );
 
+        // แปลง scheduleTime ឱ្យទៅជា Date Object ស្ដង់ដារមុនបញ្ចូលទៅ DB
+        const formattedScheduleTime = new Date(scheduleTime);
+
         await pool.query(
             'INSERT INTO scheduled_messages (channel, recipient, message, image_path, schedule_time) VALUES ($1, $2, $3, $4, $5)',
-            [channel, recipient, message || '', file ? file.path : null, scheduleTime]
+            [channel, recipient, message || '', file ? file.path : null, formattedScheduleTime]
         );
 
         res.json({ success: true, message: `បានកំណត់ពេលផ្ញើសារសម្រាប់ថ្ងៃទី ${scheduleTime} ជោគជ័យ!` });

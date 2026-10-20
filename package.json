@@ -4,6 +4,7 @@
   "description": "Standalone Notification Hub for Telegram, WhatsApp, and LINE",
   "main": "server.js",
   "scripts": {
+    "build": "npx puppeteer browsers install chrome",
     "start": "node server.js"
   },
   "dependencies": {

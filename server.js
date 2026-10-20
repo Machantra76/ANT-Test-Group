@@ -116,6 +116,79 @@ const lineConfig = {
 const lineClient = new line.Client(lineConfig);
 
 // ==========================================
+// ⏰ CRON WORKER រៀងរាល់ ១ នាទីម្តង (សម្រាប់ផ្ញើសារតាមកាលវិភាគ)
+// ==========================================
+cron.schedule('* * * * *', async () => {
+    try {
+        await pool.query(
+            `CREATE TABLE IF NOT EXISTS scheduled_messages (
+                id SERIAL PRIMARY KEY,
+                channel VARCHAR(50),
+                recipient TEXT,
+                message TEXT,
+                image_path TEXT,
+                schedule_time TIMESTAMP,
+                status VARCHAR(50) DEFAULT 'Pending',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )`
+        );
+
+        const result = await pool.query(
+            `SELECT * FROM scheduled_messages WHERE schedule_time <= NOW() AND status = 'Pending'`
+        );
+
+        const pendingMessages = result.rows;
+        if (pendingMessages.length === 0) return;
+
+        console.log(`⏰ រកឃើញសារដែលត្រូវផ្ញើស្វ័យប្រវត្តិចំនួន ${pendingMessages.length} ម៉ោង!`);
+
+        for (const item of pendingMessages) {
+            try {
+                if (item.channel === 'telegram') {
+                    const targetChatId = item.recipient || process.env.TELEGRAM_GROUP_CHAT_ID;
+                    if (item.image_path) {
+                        await telegramBot.sendPhoto(targetChatId, item.image_path, { caption: item.message || '', parse_mode: 'HTML' });
+                    } else {
+                        await telegramBot.sendMessage(targetChatId, item.message || '', { parse_mode: 'HTML' });
+                    }
+                } else if (item.channel === 'whatsapp') {
+                    const cleanNumber = item.recipient.replace(/[^0-9]/g, '');
+                    const formattedNumber = `${cleanNumber}@c.us`;
+                    if (item.image_path) {
+                        const media = MessageMedia.fromFilePath(item.image_path);
+                        await whatsappClient.sendMessage(formattedNumber, media, { caption: item.message || '' });
+                    } else {
+                        await whatsappClient.sendMessage(formattedNumber, item.message);
+                    }
+                } else if (item.channel === 'line') {
+                    const messages = [];
+                    if (item.image_path) {
+                        const baseUrl = process.env.RENDER_EXTERNAL_URL || 'http://localhost:5000';
+                        const publicImageUrl = `${baseUrl}/${item.image_path.replace(/\\/g, '/')}`;
+                        messages.push({ type: 'image', originalContentUrl: publicImageUrl, previewImageUrl: publicImageUrl });
+                    }
+                    if (item.message) messages.push({ type: 'text', text: item.message });
+                    await lineClient.pushMessage(item.recipient, messages);
+                }
+
+                await pool.query("UPDATE scheduled_messages SET status = 'Sent' WHERE id = $1", [item.id]);
+                await saveLog(item.channel, item.recipient, item.message || '[Photo]', 'Success (Scheduled)');
+                console.log(`✅ បានផ្ញើសារស្វ័យប្រវត្តិ ID: ${item.id} ជោគជ័យ!`);
+
+            } catch (err) {
+                console.error(`❌ បរាជ័យក្នុងការផ្ញើសារ ID ${item.id}:`, err.message);
+                await pool.query("UPDATE scheduled_messages SET status = $1 WHERE id = $2", [`Failed: ${err.message}`, item.id]);
+            }
+        }
+    } catch (err) {
+        console.error('❌ កំហុសក្នុង Cron Worker:', err.message);
+    }
+}, {
+    scheduled: true,
+    timezone: "Asia/Phnom_Penh"
+});
+
+// ==========================================
 // API ROUTES (គាំទ្រ File Upload)
 // ==========================================
 
@@ -179,7 +252,6 @@ app.post('/api/notify/line', upload.single('image'), async (req, res) => {
     try {
         const messages = [];
         if (file) {
-            // បញ្ជាក់៖ LINE ទាមទារ Public URL សម្រាប់រូបភាព ដូច្នេះយើងត្រូវប្រើ Render Domain ឬ URL របស់ Server
             const baseUrl = `${req.protocol}://${req.get('host')}`;
             const publicImageUrl = `${baseUrl}/uploads/${file.filename}`;
             messages.push({

@@ -118,6 +118,9 @@ const lineClient = new line.Client(lineConfig);
 // ==========================================
 // ⏰ CRON WORKER រៀងរាល់ ១ នាទីម្តង (សម្រាប់ផ្ញើសារតាមកាលវិភាគ)
 // ==========================================
+// ==========================================
+// ⏰ CRON WORKER រៀងរាល់ ១ នាទីម្តង (ផ្ញើសារតាមកាលវិភាគ - កែសម្រួល Timezone ស្របតាមកម្ពុជា)
+// ==========================================
 cron.schedule('* * * * *', async () => {
     try {
         await pool.query(
@@ -133,8 +136,10 @@ cron.schedule('* * * * *', async () => {
             )`
         );
 
+        // បម្លែងម៉ោងបច្ចុប្បន្នឱ្យត្រូវនឹងម៉ោងក្នុងតំបន់ ភ្នំពេញ (Asia/Phnom_Penh)
         const result = await pool.query(
-            `SELECT * FROM scheduled_messages WHERE schedule_time <= NOW() AND status = 'Pending'`
+            `SELECT * FROM scheduled_messages 
+             WHERE schedule_time <= (NOW() AT TIME ZONE 'Asia/Phnom_Penh') AND status = 'Pending'`
         );
 
         const pendingMessages = result.rows;

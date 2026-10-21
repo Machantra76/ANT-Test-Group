@@ -159,10 +159,10 @@ async function sendNotification(channel, recipient, message, fileBuffer, fileMim
 
 // ៨. Logic ឆែកសាររង់ចាំ និងធ្វើការផ្ញើ
 async function processPendingSchedules() {
-    // ឆែកយកសារ Pending ទាំងអស់មកផ្ញើភ្លាមៗដោយមិនបាច់រង់ចាំម៉ោង (សម្រាប់តេស្ត)
     const result = await pool.query(
-        `SELECT * FROM scheduled_messages WHERE status = 'Pending'`
+        `SELECT * FROM scheduled_messages WHERE status = 'Pending' AND schedule_time <= NOW()`
     );
+
     const pendingTasks = result.rows;
     if (pendingTasks.length === 0) {
         return { count: 0 };
@@ -185,7 +185,7 @@ async function processPendingSchedules() {
     return { count: pendingTasks.length, success: successCount };
 }
 
-// ៩. API Endpoint សម្រាប់ Cron Worker (Cron-job.org / Browser Call)
+// ៩. API Endpoint សម្រាប់ Cron Worker
 app.get('/api/run-cron', async (req, res) => {
     try {
         const result = await processPendingSchedules();
@@ -199,7 +199,7 @@ app.get('/api/run-cron', async (req, res) => {
     }
 });
 
-// ១០. API ផ្ញើសារភ្លាមៗ (Instant Send)
+// ១០. API ផ្ញើសារភ្លាមៗ
 app.post('/api/notify/send', upload.single('image'), async (req, res) => {
     const { channel, message, phoneNumber, userId } = req.body;
     const recipient = phoneNumber || userId || process.env.TELEGRAM_GROUP_CHAT_ID;
@@ -218,7 +218,7 @@ app.post('/api/notify/send', upload.single('image'), async (req, res) => {
     }
 });
 
-// ១១. API កំណត់ពេលផ្ញើសារ (Schedule)
+// ១១. API បង្កើតកាលវិភាគផ្ញើសារ (Create Schedule)
 app.post('/api/notify/schedule', upload.single('image'), async (req, res) => {
     const { channel, message, scheduleTime, phoneNumber, userId } = req.body;
     const recipient = phoneNumber || userId || process.env.TELEGRAM_GROUP_CHAT_ID;
@@ -228,7 +228,6 @@ app.post('/api/notify/schedule', upload.single('image'), async (req, res) => {
     }
 
     try {
-        // រក្សាទុក Timezone ត្រឹមត្រូវទៅក្នុង Database
         const targetDate = new Date(scheduleTime);
 
         await pool.query(
@@ -251,7 +250,65 @@ app.post('/api/notify/schedule', upload.single('image'), async (req, res) => {
     }
 });
 
-// ១២. API ទាញយក Logs
+// -------------------------------------------------------------
+// 🆕 មុខងារបន្ថែម៖ មើលបញ្ជី, កែប្រែ, និងលុប Schedule
+// -------------------------------------------------------------
+
+// ទាញយកបញ្ជីកាលវិភាគទាំងអស់ (Get All Schedules)
+app.get('/api/schedules', async (req, res) => {
+    try {
+        const result = await pool.query(
+            'SELECT id, channel, recipient, message, schedule_time, status, created_at FROM scheduled_messages ORDER BY schedule_time DESC'
+        );
+        res.json({ success: true, schedules: result.rows });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// កែប្រែព័ត៌មានកាលវិភាគ (Update Schedule)
+app.put('/api/schedules/:id', upload.single('image'), async (req, res) => {
+    const { id } = req.params;
+    const { channel, message, scheduleTime, phoneNumber, userId } = req.body;
+    const recipient = phoneNumber || userId || process.env.TELEGRAM_GROUP_CHAT_ID;
+
+    try {
+        const targetDate = new Date(scheduleTime);
+
+        if (req.file) {
+            await pool.query(
+                `UPDATE scheduled_messages 
+                 SET channel = $1, recipient = $2, message = $3, image_data = $4, image_mimetype = $5, schedule_time = $6, status = 'Pending'
+                 WHERE id = $7`,
+                [channel, recipient, message, req.file.buffer, req.file.mimetype, targetDate.toISOString(), id]
+            );
+        } else {
+            await pool.query(
+                `UPDATE scheduled_messages 
+                 SET channel = $1, recipient = $2, message = $3, schedule_time = $4, status = 'Pending'
+                 WHERE id = $5`,
+                [channel, recipient, message, targetDate.toISOString(), id]
+            );
+        }
+
+        res.json({ success: true, message: 'បានកែប្រែកាលវិភាគដោយជោគជ័យ!' });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// លុបកាលវិភាគ (Delete Schedule)
+app.delete('/api/schedules/:id', async (req, res) => {
+    const { id } = req.params;
+    try {
+        await pool.query('DELETE FROM scheduled_messages WHERE id = $1', [id]);
+        res.json({ success: true, message: 'បានលុបកាលវិភាគជោគជ័យ!' });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// API ទាញយក Logs
 app.get('/api/logs', async (req, res) => {
     try {
         const result = await pool.query('SELECT * FROM notification_logs ORDER BY created_at DESC LIMIT 50');

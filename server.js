@@ -2,8 +2,7 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
-const fs = require('fs');
-const multer = require('multer'); // 🟢 បន្ថែម multer សម្រាប់ Upload File
+const multer = require('multer'); // ប្រើ multer ក្នុង memoryStorage ដើម្បីយក Buffer
 const TelegramBot = require('node-telegram-bot-api');
 const line = require('@line/bot-sdk');
 const { Client, LocalAuth, MessageMedia } = require('whatsapp-web.js');
@@ -18,17 +17,9 @@ app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
-app.use('/uploads', express.static(path.join(__dirname, 'uploads'))); // បើកថត uploads ឱ្យສາມາດចូលមើលរូបភាពបាន
 
-// រៀបចំកន្លែងរក្សាទុករូបភាពដែល Upload ចូលមក
-if (!fs.existsSync('./uploads')) {
-    fs.mkdirSync('./uploads');
-}
-const storage = multer.diskStorage({
-    destination: (req, file, cb) => cb(null, './uploads/'),
-    filename: (req, file, cb) => cb(null, Date.now() + '-' + file.originalname)
-});
-const upload = multer({ storage: storage });
+// រក្សាទុក File ក្នុង Memory ជា Buffer មុននឹងបោះចូល Database
+const upload = multer({ storage: multer.memoryStorage() });
 
 // ==========================================
 // 🟢 POSTGRESQL DATABASE CONNECTION (Neon DB)
@@ -50,7 +41,7 @@ async function initDatabase() {
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         `);
-        console.log('✅ បានតភ្ជាប់ និងបង្កើត Table ក្នុង Neon DB ជោគជ័យ!');
+        console.log('✅ បានតភ្ជាប់ និងបង្កើត Table notification_logs ក្នុង Neon DB ជោគជ័យ!');
     } catch (err) {
         console.error('❌ កំហុសក្នុងការតភ្ជាប់ Database:', err.message);
     }
@@ -116,7 +107,7 @@ const lineConfig = {
 const lineClient = new line.Client(lineConfig);
 
 // ==========================================
-// ⏰ CRON WORKER រៀងរាល់ ១ នាទីម្តង (ផ្ញើសារតាមកាលវិភាគ - កែសម្រួលថ្មីឱ្យងាយស្រួលអាន)
+// ⏰ CRON WORKER (ផ្ញើសារតាមកាលវិភាគពី Neon DB)
 // ==========================================
 cron.schedule('* * * * *', async () => {
     try {
@@ -126,14 +117,14 @@ cron.schedule('* * * * *', async () => {
                 channel VARCHAR(50),
                 recipient TEXT,
                 message TEXT,
-                image_path TEXT,
+                image_data BYTEA,
+                image_mimetype VARCHAR(100),
                 schedule_time TIMESTAMP,
                 status VARCHAR(50) DEFAULT 'Pending',
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )`
         );
 
-        // ดึงទិន្នន័យដែលដល់ម៉ោង ដោយប្រៀបធៀបជាមួយ NOW() ដោយផ្ទាល់
         const result = await pool.query(
             `SELECT * FROM scheduled_messages WHERE schedule_time <= NOW() AND status = 'Pending'`
         );
@@ -145,31 +136,42 @@ cron.schedule('* * * * *', async () => {
 
         for (const item of pendingMessages) {
             try {
+                let tempFilePath = null;
+                if (item.image_data) {
+                    // បង្កើត File បណ្តោះអាសន្នពី Buffer ក្នុង DB ដើម្បីផ្ញើចេញ
+                    const fs = require('fs');
+                    const ext = item.image_mimetype ? item.image_mimetype.split('/')[1] : 'jpg';
+                    tempFilePath = path.join(__dirname, `temp_${item.id}.${ext}`);
+                    fs.writeFileSync(tempFilePath, item.image_data);
+                }
+
                 if (item.channel === 'telegram') {
                     const targetChatId = item.recipient || process.env.TELEGRAM_GROUP_CHAT_ID;
-                    if (item.image_path) {
-                        await telegramBot.sendPhoto(targetChatId, item.image_path, { caption: item.message || '', parse_mode: 'HTML' });
+                    if (tempFilePath) {
+                        await telegramBot.sendPhoto(targetChatId, tempFilePath, { caption: item.message || '', parse_mode: 'HTML' });
                     } else {
                         await telegramBot.sendMessage(targetChatId, item.message || '', { parse_mode: 'HTML' });
                     }
                 } else if (item.channel === 'whatsapp') {
                     const cleanNumber = item.recipient.replace(/[^0-9]/g, '');
                     const formattedNumber = `${cleanNumber}@c.us`;
-                    if (item.image_path) {
-                        const media = MessageMedia.fromFilePath(item.image_path);
+                    if (tempFilePath) {
+                        const media = MessageMedia.fromFilePath(tempFilePath);
                         await whatsappClient.sendMessage(formattedNumber, media, { caption: item.message || '' });
                     } else {
                         await whatsappClient.sendMessage(formattedNumber, item.message);
                     }
                 } else if (item.channel === 'line') {
+                    // សម្រាប់ LINE បើមានរូបភាព ត្រូវប្រើ Base64 Data URI ឬ URL 
+                    // (អាចផ្ញើ Text ជាជម្រើសចម្បង ឬ Upload ទុកលើ Cloud ប្រសិនបើ LINE ទាមទារ URL)
                     const messages = [];
-                    if (item.image_path) {
-                        const baseUrl = process.env.RENDER_EXTERNAL_URL || 'http://localhost:5000';
-                        const publicImageUrl = `${baseUrl}/${item.image_path.replace(/\\/g, '/')}`;
-                        messages.push({ type: 'image', originalContentUrl: publicImageUrl, previewImageUrl: publicImageUrl });
-                    }
                     if (item.message) messages.push({ type: 'text', text: item.message });
                     await lineClient.pushMessage(item.recipient, messages);
+                }
+
+                // លុប File បណ្តោះអាសន្នវិញក្រោយផ្ញើរួច
+                if (tempFilePath && require('fs').existsSync(tempFilePath)) {
+                    require('fs').unlinkSync(tempFilePath);
                 }
 
                 await pool.query("UPDATE scheduled_messages SET status = 'Sent' WHERE id = $1", [item.id]);
@@ -190,7 +192,7 @@ cron.schedule('* * * * *', async () => {
 });
 
 // ==========================================
-// API ROUTES (គាំទ្រ File Upload)
+// API ROUTES (រក្សាទុករូបភាពជា Buffer ក្នុង Database)
 // ==========================================
 
 // ១. Telegram API
@@ -200,8 +202,13 @@ app.post('/api/notify/telegram', upload.single('image'), async (req, res) => {
     const file = req.file;
 
     try {
+        let tempFilePath = null;
         if (file) {
-            await telegramBot.sendPhoto(targetChatId, file.path, { caption: message || '', parse_mode: 'HTML' });
+            const fs = require('fs');
+            tempFilePath = path.join(__dirname, `temp_${Date.now()}.${file.mimetype.split('/')[1]}`);
+            fs.writeFileSync(tempFilePath, file.buffer);
+            await telegramBot.sendPhoto(targetChatId, tempFilePath, { caption: message || '', parse_mode: 'HTML' });
+            fs.unlinkSync(tempFilePath);
         } else {
             await telegramBot.sendMessage(targetChatId, message || '', { parse_mode: 'HTML' });
         }
@@ -227,7 +234,7 @@ app.post('/api/notify/whatsapp', upload.single('image'), async (req, res) => {
         const formattedNumber = `${cleanNumber}@c.us`;
 
         if (file) {
-            const media = MessageMedia.fromFilePath(file.path);
+            const media = new MessageMedia(file.mimetype, file.buffer.toString('base64'), file.originalname);
             await whatsappClient.sendMessage(formattedNumber, media, { caption: message || '' });
         } else {
             await whatsappClient.sendMessage(formattedNumber, message);
@@ -252,18 +259,7 @@ app.post('/api/notify/line', upload.single('image'), async (req, res) => {
 
     try {
         const messages = [];
-        if (file) {
-            const baseUrl = `${req.protocol}://${req.get('host')}`;
-            const publicImageUrl = `${baseUrl}/uploads/${file.filename}`;
-            messages.push({
-                type: 'image',
-                originalContentUrl: publicImageUrl,
-                previewImageUrl: publicImageUrl
-            });
-        }
-        if (message) {
-            messages.push({ type: 'text', text: message });
-        }
+        if (message) messages.push({ type: 'text', text: message });
 
         await lineClient.pushMessage(userId, messages);
         await saveLog('LINE', userId, message || '[Photo]', 'Success');
@@ -284,7 +280,11 @@ app.post('/api/notify/broadcast', upload.single('image'), async (req, res) => {
         const tChatId = process.env.TELEGRAM_GROUP_CHAT_ID;
         try {
             if (file) {
-                await telegramBot.sendPhoto(tChatId, file.path, { caption: message || '', parse_mode: 'HTML' });
+                const fs = require('fs');
+                const tempFilePath = path.join(__dirname, `temp_bc_${Date.now()}.${file.mimetype.split('/')[1]}`);
+                fs.writeFileSync(tempFilePath, file.buffer);
+                await telegramBot.sendPhoto(tChatId, tempFilePath, { caption: message || '', parse_mode: 'HTML' });
+                fs.unlinkSync(tempFilePath);
             } else {
                 await telegramBot.sendMessage(tChatId, message || '', { parse_mode: 'HTML' });
             }
@@ -299,7 +299,7 @@ app.post('/api/notify/broadcast', upload.single('image'), async (req, res) => {
         try {
             const cleanNumber = whatsappPhone.replace(/[^0-9]/g, '');
             if (file) {
-                const media = MessageMedia.fromFilePath(file.path);
+                const media = new MessageMedia(file.mimetype, file.buffer.toString('base64'), file.originalname);
                 await whatsappClient.sendMessage(`${cleanNumber}@c.us`, media, { caption: message || '' });
             } else {
                 await whatsappClient.sendMessage(`${cleanNumber}@c.us`, message);
@@ -314,13 +314,7 @@ app.post('/api/notify/broadcast', upload.single('image'), async (req, res) => {
     if (lineUserId && lineConfig.channelAccessToken) {
         try {
             const messages = [];
-            if (file) {
-                const baseUrl = `${req.protocol}://${req.get('host')}`;
-                const publicImageUrl = `${baseUrl}/uploads/${file.filename}`;
-                messages.push({ type: 'image', originalContentUrl: publicImageUrl, previewImageUrl: publicImageUrl });
-            }
             if (message) messages.push({ type: 'text', text: message });
-
             await lineClient.pushMessage(lineUserId, messages);
             await saveLog('LINE (Broadcast)', lineUserId, message || '[Photo]', 'Success');
             status.line = 'ជោគជ័យ';
@@ -332,7 +326,7 @@ app.post('/api/notify/broadcast', upload.single('image'), async (req, res) => {
     res.json({ success: true, status });
 });
 
-// ៥. API រក្សាទុកកាលវិភាគ (កែសម្រួល Date Parsing ឱ្យត្រឹមត្រូវ)
+// ៥. API រក្សាទុកកាលវិភាគចូល Database (รวมយករូបភាពដាក់ជា BYTEA)
 app.post('/api/notify/schedule', upload.single('image'), async (req, res) => {
     const { channel, message, scheduleTime, phoneNumber, userId } = req.body;
     const file = req.file;
@@ -349,19 +343,19 @@ app.post('/api/notify/schedule', upload.single('image'), async (req, res) => {
                 channel VARCHAR(50),
                 recipient TEXT,
                 message TEXT,
-                image_path TEXT,
+                image_data BYTEA,
+                image_mimetype VARCHAR(100),
                 schedule_time TIMESTAMP,
                 status VARCHAR(50) DEFAULT 'Pending',
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )`
         );
 
-        // แปลง scheduleTime ឱ្យទៅជា Date Object ស្ដង់ដារមុនបញ្ចូលទៅ DB
         const formattedScheduleTime = new Date(scheduleTime);
 
         await pool.query(
-            'INSERT INTO scheduled_messages (channel, recipient, message, image_path, schedule_time) VALUES ($1, $2, $3, $4, $5)',
-            [channel, recipient, message || '', file ? file.path : null, formattedScheduleTime]
+            'INSERT INTO scheduled_messages (channel, recipient, message, image_data, image_mimetype, schedule_time) VALUES ($1, $2, $3, $4, $5, $6)',
+            [channel, recipient, message || '', file ? file.buffer : null, file ? file.mimetype : null, formattedScheduleTime]
         );
 
         res.json({ success: true, message: `បានកំណត់ពេលផ្ញើសារសម្រាប់ថ្ងៃទី ${scheduleTime} ជោគជ័យ!` });

@@ -6,6 +6,7 @@ const multer = require('multer');
 const TelegramBot = require('node-telegram-bot-api');
 const line = require('@line/bot-sdk');
 const { Client, LocalAuth, MessageMedia } = require('whatsapp-web.js');
+const puppeteer = require('puppeteer');
 const qrcode = require('qrcode-terminal');
 const { Pool } = require('pg');
 const fs = require('fs');
@@ -79,11 +80,12 @@ if (telegramToken && !telegramToken.includes('YOUR_TELEGRAM')) {
     console.log('✅ [Telegram Bot] តភ្ជាប់ជោគជ័យ!');
 }
 
-// ៥. WhatsApp Setup
+// ៥. WhatsApp Setup (កែសម្រួលប្រើ puppeteer.executablePath ឱ្យស្គាល់ Chrome លើ Render ស្វ័យប្រវត្តិ)
 const whatsappClient = new Client({
     authStrategy: new LocalAuth(),
     puppeteer: {
         headless: true,
+        executablePath: puppeteer.executablePath(),
         args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu']
     }
 });

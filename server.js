@@ -81,18 +81,33 @@ if (telegramToken && !telegramToken.includes('YOUR_TELEGRAM')) {
 }
 
 // ៥. WhatsApp Setup (កែសម្រួលប្រើ puppeteer.executablePath ឱ្យស្គាល់ Chrome លើ Render ស្វ័យប្រវត្តិ)
+// ៥. WhatsApp Setup (កំណត់កូដបែប Safe Mode)
 const whatsappClient = new Client({
     authStrategy: new LocalAuth(),
     puppeteer: {
         headless: true,
-        executablePath: puppeteer.executablePath(),
-        args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu']
+        args: [
+            '--no-sandbox', 
+            '--disable-setuid-sandbox', 
+            '--disable-dev-shm-usage', 
+            '--disable-gpu',
+            '--no-zygote',
+            '--single-process'
+        ]
     }
 });
-whatsappClient.on('qr', (qr) => qrcode.generate(qr, { small: true }));
-whatsappClient.on('ready', () => console.log('✅ [WhatsApp Client] រួចរាល់!'));
-whatsappClient.initialize().catch(err => console.error('❌ [WhatsApp Error]:', err.message));
 
+whatsappClient.on('qr', (qr) => {
+    qrcode.generate(qr, { small: true });
+    console.log('📱 [WhatsApp] សូមស្កេន QR Code នេះដើម្បីតភ្ជាប់!');
+});
+
+whatsappClient.on('ready', () => console.log('✅ [WhatsApp Client] រួចរាល់!'));
+
+// បន្ថែម Error Handler ដើម្បីកុំឱ្យ Server គាំង (Crash) ពេល WhatsApp មានបញ្ហា
+whatsappClient.initialize().catch(err => {
+    console.error('⚠️ [WhatsApp Warning]: មិនអាចដំណើរការ WhatsApp Client បានទេ ប៉ុន្តែ Server នៅតែបន្តដំណើរការធម្មតា។ Error:', err.message);
+});
 // ៦. LINE Bot Setup
 const lineConfig = {
     channelAccessToken: process.env.LINE_CHANNEL_ACCESS_TOKEN || '',

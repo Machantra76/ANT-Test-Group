@@ -191,6 +191,7 @@ app.post('/api/notify/send', upload.single('image'), async (req, res) => {
 
 // API រក្សាទុកកាលវិភាគ (Schedule)
 // API រក្សាទុកកាលវិភាគ (Schedule) - បានកែសម្រួលការគណនាម៉ោង UTC
+// API រក្សាទុកកាលវិភាគ (Schedule) - បម្លែងម៉ោងឱ្យត្រូវជា UTC មុនរក្សាទុក
 app.post('/api/notify/schedule', upload.single('image'), async (req, res) => {
     const { channel, message, scheduleTime, phoneNumber, userId } = req.body;
     const recipient = phoneNumber || userId || process.env.TELEGRAM_GROUP_CHAT_ID;
@@ -200,13 +201,15 @@ app.post('/api/notify/schedule', upload.single('image'), async (req, res) => {
     }
 
     try {
-        // បំប្លែងម៉ោង datetime-local ឱ្យទៅជា Date object ស្របតាមម៉ោង Local របស់អ្នកប្រើប្រាស់
-        // រួចបម្លែងវាចេញជា UTC Date ដើម្បីយកទៅ သိမ်းក្នុង Database
         const localDate = new Date(scheduleTime);
         
+        // ដកម៉ោង Local ចេញដើម្បីទូទាត់ជាមួយ UTC (ដក ៧ ម៉ោង សម្រាប់ម៉ោងនៅកម្ពុជា GMT+7)
+        // ឬប្រើ getTimezoneOffset() ដើម្បីឱ្យវាស្វ័យប្រវត្តិគ្រប់ទីកន្លែង
+        const utcDate = new Date(localDate.getTime() - (localDate.getTimezoneOffset() * 60000));
+
         await pool.query(
             'INSERT INTO scheduled_messages (channel, recipient, message, image_data, image_mimetype, schedule_time) VALUES ($1, $2, $3, $4, $5, $6)',
-            [channel, recipient, message || '', req.file ? req.file.buffer : null, req.file ? req.file.mimetype : null, localDate]
+            [channel, recipient, message || '', req.file ? req.file.buffer : null, req.file ? req.file.mimetype : null, utcDate]
         );
         res.json({ success: true, message: `បានកំណត់ពេលផ្ញើសារសម្រាប់ថ្ងៃទី ${scheduleTime} រួចរាល់!` });
     } catch (err) {

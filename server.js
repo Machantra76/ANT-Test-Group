@@ -146,15 +146,15 @@ async function executeNotification(channel, recipient, message, file) {
         require('fs').unlinkSync(tempFilePath);
     }
 }
-// ⏰ ជំនួសដោយ setInterval រៀងរាល់ ១ នាទីម្តង (៦០,០០០ មីលីវិនាទី)
-setInterval(async () => {
+
+// ⚙️ Logic កណ្ដាលសម្រាប់ដំណើរការពិនិត្យ និងផ្ញើសារតាមកាលវិភាគ
+async function processScheduledMessages() {
     try {
-        // ប្រើប្រាស់ CURRENT_TIMESTAMP ដើម្បីប្រៀបធៀបម៉ោងជាមួយ Database ផ្ទាល់
         const result = await pool.query(
             `SELECT * FROM scheduled_messages WHERE schedule_time <= CURRENT_TIMESTAMP AND status = 'Pending'`
         );
 
-        if (result.rows.length === 0) return;
+        if (result.rows.length === 0) return { processed: 0 };
         console.log(`⏰ រកឃើញសារស្វ័យប្រវត្តិចំនួន ${result.rows.length} ត្រូវផ្ញើ!`);
 
         for (const item of result.rows) {
@@ -171,35 +171,36 @@ setInterval(async () => {
                 await pool.query("UPDATE scheduled_messages SET status = $1 WHERE id = $2", [`Failed: ${err.message}`, item.id]);
             }
         }
+        return { processed: result.rows.length };
+    } catch (err) {
+        console.error('❌ Process Scheduled Error:', err.message);
+        throw err;
+    }
+}
+
+// 🌐 Endpoint ថ្មី៖ សម្រាប់ឱ្យ Cron-job.org មកគោះហៅដើម្បីការពារ Render Sleep និងបញ្ជូនសារស្វ័យប្រវត្តិ
+app.get('/api/run-cron', async (req, res) => {
+    try {
+        await processScheduledMessages();
+        res.json({ success: true, message: 'Cron executed successfully via external trigger.' });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// ⏰ setInterval រៀងរាល់ ១ នាទីម្តង
+setInterval(async () => {
+    try {
+        await processScheduledMessages();
     } catch (err) {
         console.error('❌ Interval Worker Error:', err.message);
     }
-}, 60000); // ៦០វិនាទី ឆែកម្តង
+}, 60000);
 
-// ⏰ CRON WORKER រៀងរាល់ ១ នាទីម្តង (ផ្ញើសារតាមកាលវិភាគ)
+// ⏰ CRON WORKER រៀងរាល់ ១ នាទីម្តង
 cron.schedule('* * * * *', async () => {
     try {
-        const result = await pool.query(
-            `SELECT * FROM scheduled_messages WHERE schedule_time <= CURRENT_TIMESTAMP AND status = 'Pending'`
-        );
-
-        if (result.rows.length === 0) return;
-        console.log(`⏰ រកឃើញសារស្វ័យប្រវត្តិចំនួន ${result.rows.length} ត្រូវផ្ញើ!`);
-
-        for (const item of result.rows) {
-            try {
-                let fileObj = null;
-                if (item.image_data) {
-                    fileObj = { buffer: item.image_data, mimetype: item.image_mimetype, originalname: 'image.jpg' };
-                }
-                await executeNotification(item.channel, item.recipient, item.message, fileObj);
-                await pool.query("UPDATE scheduled_messages SET status = 'Sent' WHERE id = $1", [item.id]);
-                console.log(`✅ បានផ្ញើសារ Schedule ID: ${item.id} ជោគជ័យ!`);
-            } catch (err) {
-                console.error(`❌ បរាជ័យ Schedule ID ${item.id}:`, err.message);
-                await pool.query("UPDATE scheduled_messages SET status = $1 WHERE id = $2", [`Failed: ${err.message}`, item.id]);
-            }
-        }
+        await processScheduledMessages();
     } catch (err) {
         console.error('❌ Cron Error:', err.message);
     }
@@ -218,8 +219,6 @@ app.post('/api/notify/send', upload.single('image'), async (req, res) => {
     }
 });
 
-// API រក្សាទុកកាលវិភាគ (Schedule)
-// API រក្សាទុកកាលវិភាគ (Schedule) - បានកែសម្រួលការគណនាម៉ោង UTC
 // API រក្សាទុកកាលវិភាគ (Schedule) - បម្លែងម៉ោងឱ្យត្រូវជា UTC មុនរក្សាទុក
 app.post('/api/notify/schedule', upload.single('image'), async (req, res) => {
     const { channel, message, scheduleTime, phoneNumber, userId } = req.body;
@@ -231,9 +230,6 @@ app.post('/api/notify/schedule', upload.single('image'), async (req, res) => {
 
     try {
         const localDate = new Date(scheduleTime);
-        
-        // ដកម៉ោង Local ចេញដើម្បីទូទាត់ជាមួយ UTC (ដក ៧ ម៉ោង សម្រាប់ម៉ោងនៅកម្ពុជា GMT+7)
-        // ឬប្រើ getTimezoneOffset() ដើម្បីឱ្យវាស្វ័យប្រវត្តិគ្រប់ទីកន្លែង
         const utcDate = new Date(localDate.getTime() - (localDate.getTimezoneOffset() * 60000));
 
         await pool.query(
@@ -245,6 +241,7 @@ app.post('/api/notify/schedule', upload.single('image'), async (req, res) => {
         res.status(500).json({ success: false, error: err.message });
     }
 });
+
 app.get('/api/logs', async (req, res) => {
     try {
         const result = await pool.query('SELECT * FROM notification_logs ORDER BY created_at DESC LIMIT 50');

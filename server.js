@@ -102,6 +102,7 @@ const lineClient = (lineConfig.channelAccessToken && !lineConfig.channelAccessTo
     : null;
 
 // 🆕 Function សម្រាប់សរសេរអត្ថបទ/Date ដាក់លើរូបភាពជានិច្ច
+// Function សម្រាប់សរសេរអត្ថបទដាក់នៅផ្នែកខាងលើនៃរូបភាព
 async function addTextToImage(imageBuffer, text) {
     if (!text) return imageBuffer;
     try {
@@ -122,8 +123,8 @@ async function addTextToImage(imageBuffer, text) {
                         fill: rgba(0, 0, 0, 0.65);
                     }
                 </style>
-                <rect x="0" y="${height - 100}" width="${width}" height="100" class="bg" />
-                <text x="30" y="${height - 40}" class="text">${text}</text>
+                <rect x="0" y="0" width="${width}" height="100" class="bg" />
+                <text x="30" y="65" class="text">${text}</text>
             </svg>
         `;
 

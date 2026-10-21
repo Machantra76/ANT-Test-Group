@@ -4,23 +4,167 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Notification Hub Dashboard</title>
+    <!-- Import Google Fonts: Kantumruy Pro (Khmer) & Inter (English) -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Kantumruy+Pro:wght@400;500;600;700&display=swap" rel="stylesheet">
+
     <style>
-        * { box-sizing: border-box; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
-        body { background-color: #f0f2f5; margin: 0; padding: 20px; }
-        .container { max-width: 600px; margin: 0 auto; background: #fff; padding: 25px; border-radius: 10px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
-        h2 { text-align: center; color: #1c2d42; margin-bottom: 20px; }
-        .form-group { margin-bottom: 15px; }
-        label { display: block; margin-bottom: 6px; font-weight: 600; color: #444; }
-        select, input, textarea { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 6px; font-size: 14px; }
-        .btn-group { display: flex; gap: 10px; margin-top: 20px; }
-        button { flex: 1; padding: 12px; border: none; border-radius: 6px; font-size: 15px; font-weight: bold; cursor: pointer; color: white; transition: 0.3s; }
-        .btn-send { background-color: #28a745; }
-        .btn-send:hover { background-color: #218838; }
-        .btn-schedule { background-color: #007bff; }
-        .btn-schedule:hover { background-color: #0069d9; }
-        #alert { margin-top: 15px; padding: 10px; border-radius: 6px; display: none; text-align: center; font-weight: bold; }
-        .alert-success { background-color: #d4edda; color: #155724; }
-        .alert-error { background-color: #f8d7da; color: #721c24; }
+        * { 
+            box-sizing: border-box; 
+            font-family: 'Kantumruy Pro', 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; 
+        }
+        
+        body { 
+            background: linear-gradient(135deg, #f0f4f8 0%, #e2e8f0 100%); 
+            margin: 0; 
+            padding: 30px 15px; 
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .container { 
+            width: 100%;
+            max-width: 620px; 
+            background: #ffffff; 
+            padding: 35px 30px; 
+            border-radius: 16px; 
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.08), 0 8px 10px -6px rgba(0, 0, 0, 0.01); 
+            border: 1px solid #e2e8f0;
+        }
+
+        h2 { 
+            text-align: center; 
+            color: #0f172a; 
+            margin-top: 0;
+            margin-bottom: 25px; 
+            font-size: 22px;
+            font-weight: 700;
+            letter-spacing: -0.3px;
+        }
+
+        .form-group { 
+            margin-bottom: 20px; 
+        }
+
+        label { 
+            display: block; 
+            margin-bottom: 8px; 
+            font-weight: 600; 
+            color: #334155; 
+            font-size: 14px;
+        }
+
+        select, input[type="text"], input[type="datetime-local"], textarea { 
+            width: 100%; 
+            padding: 12px 14px; 
+            border: 1.5px solid #cbd5e1; 
+            border-radius: 8px; 
+            font-size: 14px; 
+            color: #0f172a;
+            background-color: #f8fafc;
+            transition: all 0.2s ease-in-out;
+            outline: none;
+        }
+
+        select:focus, input:focus, textarea:focus {
+            border-color: #3b82f6;
+            background-color: #ffffff;
+            box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.15);
+        }
+
+        input[type="file"] {
+            width: 100%;
+            padding: 8px;
+            font-size: 13px;
+            color: #475569;
+        }
+
+        .btn-group { 
+            display: flex; 
+            gap: 15px; 
+            margin-top: 28px; 
+        }
+
+        button { 
+            flex: 1; 
+            padding: 14px 20px; 
+            border: none; 
+            border-radius: 10px; 
+            font-size: 15px; 
+            font-weight: 700; 
+            cursor: pointer; 
+            color: #ffffff; 
+            transition: all 0.25s ease; 
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            letter-spacing: 0.2px;
+            text-shadow: 0 1px 2px rgba(0,0,0,0.2);
+        }
+
+        /* 🎨 ប៊ូតុងផ្ញើភ្លាមៗ - ពណ៌បៃតងលេច */
+        .btn-send { 
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%); 
+            box-shadow: 0 4px 12px rgba(16, 185, 129, 0.35);
+        }
+
+        .btn-send:hover { 
+            background: linear-gradient(135deg, #059669 0%, #047857 100%); 
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px rgba(16, 185, 129, 0.45);
+        }
+
+        .btn-send:active {
+            transform: translateY(0);
+        }
+
+        /* 🎨 ប៊ូតុងកំណត់ពេល - ពណ៌ខៀវលេច */
+        .btn-schedule { 
+            background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%); 
+            box-shadow: 0 4px 12px rgba(37, 99, 235, 0.35);
+        }
+
+        .btn-schedule:hover { 
+            background: linear-gradient(135deg, #1d4ed8 0%, #1e40af 100%); 
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px rgba(37, 99, 235, 0.45);
+        }
+
+        .btn-schedule:active {
+            transform: translateY(0);
+        }
+
+        #alert { 
+            margin-top: 20px; 
+            padding: 14px 16px; 
+            border-radius: 8px; 
+            display: none; 
+            text-align: center; 
+            font-weight: 600; 
+            font-size: 14px;
+            animation: fadeIn 0.3s ease;
+        }
+
+        .alert-success { 
+            background-color: #dcfce7; 
+            color: #15803d; 
+            border: 1px solid #bbf7d0;
+        }
+
+        .alert-error { 
+            background-color: #fee2e2; 
+            color: #b91c1c; 
+            border: 1px solid #fecaca;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(-5px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
     </style>
 </head>
 <body>
@@ -59,8 +203,12 @@
         </div>
 
         <div class="btn-group">
-            <button type="button" class="btn-send" onclick="submitForm('/api/notify/send')">ផ្ញើភ្លាមៗ (Send Now)</button>
-            <button type="button" class="btn-schedule" onclick="submitForm('/api/notify/schedule')">កំណត់ពេល (Schedule)</button>
+            <button type="button" class="btn-send" onclick="submitForm('/api/notify/send')">
+                🚀 ផ្ញើភ្លាមៗ (Send Now)
+            </button>
+            <button type="button" class="btn-schedule" onclick="submitForm('/api/notify/schedule')">
+                ⏰ កំណត់ពេល (Schedule)
+            </button>
         </div>
     </form>
 
@@ -71,7 +219,6 @@
     async function submitForm(url) {
         const form = document.getElementById('notifyForm');
         const formData = new FormData(form);
-        const alertDiv = document.getElementById('alert');
 
         if (url.includes('schedule') && !document.getElementById('scheduleTime').value) {
             showAlert('សូមជ្រើសរើសម៉ោងសម្រាប់ការកំណត់ពេល (Schedule)!', false);

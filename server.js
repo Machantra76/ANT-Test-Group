@@ -218,7 +218,7 @@ app.post('/api/notify/send', upload.single('image'), async (req, res) => {
     }
 });
 
-// ១១. API បង្កើតកាលវិភាគផ្ញើសារ (Create Schedule)
+// ១១. API បង្កើតកាលវិភាគផ្ញើសារ (Create Schedule) - កែសម្រួល Timezone ឱ្យត្រូវម៉ោងកម្ពុជា (+07:00)
 app.post('/api/notify/schedule', upload.single('image'), async (req, res) => {
     const { channel, message, scheduleTime, phoneNumber, userId } = req.body;
     const recipient = phoneNumber || userId || process.env.TELEGRAM_GROUP_CHAT_ID;
@@ -228,7 +228,7 @@ app.post('/api/notify/schedule', upload.single('image'), async (req, res) => {
     }
 
     try {
-        const targetDate = new Date(scheduleTime);
+        const targetDate = new Date(scheduleTime + '+07:00');
 
         await pool.query(
             `INSERT INTO scheduled_messages 
@@ -266,14 +266,14 @@ app.get('/api/schedules', async (req, res) => {
     }
 });
 
-// កែប្រែព័ត៌មានកាលវិភាគ (Update Schedule)
+// កែប្រែព័ត៌មានកាលវិភាគ (Update Schedule) - កែសម្រួល Timezone ឱ្យត្រូវម៉ោងកម្ពុជា (+07:00)
 app.put('/api/schedules/:id', upload.single('image'), async (req, res) => {
     const { id } = req.params;
     const { channel, message, scheduleTime, phoneNumber, userId } = req.body;
     const recipient = phoneNumber || userId || process.env.TELEGRAM_GROUP_CHAT_ID;
 
     try {
-        const targetDate = new Date(scheduleTime);
+        const targetDate = new Date(scheduleTime + '+07:00');
 
         if (req.file) {
             await pool.query(

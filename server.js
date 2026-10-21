@@ -107,7 +107,7 @@ async function executeNotification(channel, recipient, message, file) {
 
     if (channel === 'telegram' || channel === 'broadcast') {
         const targetChatId = recipient || process.env.TELEGRAM_GROUP_CHAT_ID;
-        if (targetChatId) {
+        if (targetChatId && telegramBot) {
             if (tempFilePath) {
                 await telegramBot.sendPhoto(targetChatId, tempFilePath, { caption: message || '', parse_mode: 'HTML' });
             } else {
@@ -151,7 +151,7 @@ async function executeNotification(channel, recipient, message, file) {
 cron.schedule('* * * * *', async () => {
     try {
         const result = await pool.query(
-            `SELECT * FROM scheduled_messages WHERE schedule_time <= NOW() AND status = 'Pending'`
+            `SELECT * FROM scheduled_messages WHERE schedule_time <= CURRENT_TIMESTAMP AND status = 'Pending'`
         );
 
         if (result.rows.length === 0) return;
@@ -174,7 +174,7 @@ cron.schedule('* * * * *', async () => {
     } catch (err) {
         console.error('❌ Cron Error:', err.message);
     }
-}, { scheduled: true, timezone: "Asia/Phnom_Penh" });
+}, { scheduled: true, timezone: "UTC" });
 
 // API ផ្ញើសារភ្លាមៗ
 app.post('/api/notify/send', upload.single('image'), async (req, res) => {

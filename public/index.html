@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Notification Hub Dashboard</title>
-    <!-- Import Google Fonts: Kantumruy Pro (Khmer) & Inter (English) -->
+    <!-- Import Google Fonts: Kantumruy Pro & Inter -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Kantumruy+Pro:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -21,33 +21,30 @@
             padding: 30px 15px; 
             min-height: 100vh;
             display: flex;
+            flex-direction: column;
             align-items: center;
-            justify-content: center;
         }
 
         .container { 
             width: 100%;
-            max-width: 620px; 
+            max-width: 800px; 
             background: #ffffff; 
             padding: 35px 30px; 
             border-radius: 16px; 
-            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.08), 0 8px 10px -6px rgba(0, 0, 0, 0.01); 
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.08); 
             border: 1px solid #e2e8f0;
+            margin-bottom: 30px;
         }
 
-        h2 { 
+        h2, h3 { 
             text-align: center; 
             color: #0f172a; 
             margin-top: 0;
             margin-bottom: 25px; 
-            font-size: 22px;
             font-weight: 700;
-            letter-spacing: -0.3px;
         }
 
-        .form-group { 
-            margin-bottom: 20px; 
-        }
+        .form-group { margin-bottom: 20px; }
 
         label { 
             display: block; 
@@ -75,22 +72,15 @@
             box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.15);
         }
 
-        input[type="file"] {
-            width: 100%;
-            padding: 8px;
-            font-size: 13px;
-            color: #475569;
-        }
-
         .btn-group { 
             display: flex; 
-            gap: 15px; 
-            margin-top: 28px; 
+            gap: 12px; 
+            margin-top: 25px; 
         }
 
         button { 
             flex: 1; 
-            padding: 14px 20px; 
+            padding: 14px; 
             border: none; 
             border-radius: 10px; 
             font-size: 15px; 
@@ -102,76 +92,52 @@
             align-items: center;
             justify-content: center;
             gap: 8px;
-            letter-spacing: 0.2px;
-            text-shadow: 0 1px 2px rgba(0,0,0,0.2);
+            text-shadow: 0 1px 2px rgba(0,0,0,0.1);
         }
 
-        /* 🎨 ប៊ូតុងផ្ញើភ្លាមៗ - ពណ៌បៃតងលេច */
-        .btn-send { 
-            background: linear-gradient(135deg, #10b981 0%, #059669 100%); 
-            box-shadow: 0 4px 12px rgba(16, 185, 129, 0.35);
-        }
+        .btn-send { background: linear-gradient(135deg, #10b981 0%, #059669 100%); box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3); }
+        .btn-send:hover { transform: translateY(-2px); }
 
-        .btn-send:hover { 
-            background: linear-gradient(135deg, #059669 0%, #047857 100%); 
-            transform: translateY(-2px);
-            box-shadow: 0 6px 16px rgba(16, 185, 129, 0.45);
-        }
+        .btn-schedule { background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%); box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3); }
+        .btn-schedule:hover { transform: translateY(-2px); }
 
-        .btn-send:active {
-            transform: translateY(0);
-        }
+        .btn-cancel { background: #64748b; display: none; }
+        .btn-cancel:hover { background: #475569; }
 
-        /* 🎨 ប៊ូតុងកំណត់ពេល - ពណ៌ខៀវលេច */
-        .btn-schedule { 
-            background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%); 
-            box-shadow: 0 4px 12px rgba(37, 99, 235, 0.35);
-        }
+        /* Table Styling */
+        .table-responsive { width: 100%; overflow-x: auto; }
+        table { width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 14px; }
+        th, td { padding: 12px 10px; text-align: left; border-bottom: 1px solid #e2e8f0; }
+        th { background-color: #f1f5f9; color: #334155; font-weight: 700; }
 
-        .btn-schedule:hover { 
-            background: linear-gradient(135deg, #1d4ed8 0%, #1e40af 100%); 
-            transform: translateY(-2px);
-            box-shadow: 0 6px 16px rgba(37, 99, 235, 0.45);
-        }
+        .badge { padding: 4px 8px; border-radius: 6px; font-size: 12px; font-weight: 600; }
+        .badge-pending { background-color: #fef3c7; color: #d97706; }
+        .badge-sent { background-color: #dcfce7; color: #15803d; }
+        .badge-failed { background-color: #fee2e2; color: #b91c1c; }
 
-        .btn-schedule:active {
-            transform: translateY(0);
-        }
+        .btn-action { padding: 6px 10px; font-size: 12px; border-radius: 6px; margin-right: 4px; }
+        .btn-edit { background-color: #f59e0b; color: white; }
+        .btn-delete { background-color: #ef4444; color: white; }
 
         #alert { 
             margin-top: 20px; 
-            padding: 14px 16px; 
+            padding: 14px; 
             border-radius: 8px; 
             display: none; 
             text-align: center; 
             font-weight: 600; 
-            font-size: 14px;
-            animation: fadeIn 0.3s ease;
         }
-
-        .alert-success { 
-            background-color: #dcfce7; 
-            color: #15803d; 
-            border: 1px solid #bbf7d0;
-        }
-
-        .alert-error { 
-            background-color: #fee2e2; 
-            color: #b91c1c; 
-            border: 1px solid #fecaca;
-        }
-
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(-5px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
+        .alert-success { background-color: #dcfce7; color: #15803d; border: 1px solid #bbf7d0; }
+        .alert-error { background-color: #fee2e2; color: #b91c1c; border: 1px solid #fecaca; }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <h2>Notification Hub (Telegram / LINE / WhatsApp)</h2>
+    <h2 id="formTitle">Notification Hub (Telegram / LINE / WhatsApp)</h2>
     <form id="notifyForm" enctype="multipart/form-data">
+        <input type="hidden" id="editId" name="editId">
+
         <div class="form-group">
             <label for="channel">ជ្រើសរើសប្រព័ន្ធ (Channel):</label>
             <select id="channel" name="channel" required>
@@ -203,11 +169,14 @@
         </div>
 
         <div class="btn-group">
-            <button type="button" class="btn-send" onclick="submitForm('/api/notify/send')">
+            <button type="button" id="btnSend" class="btn-send" onclick="submitForm('/api/notify/send')">
                 🚀 ផ្ញើភ្លាមៗ (Send Now)
             </button>
-            <button type="button" class="btn-schedule" onclick="submitForm('/api/notify/schedule')">
+            <button type="button" id="btnSchedule" class="btn-schedule" onclick="handleScheduleSubmit()">
                 ⏰ កំណត់ពេល (Schedule)
+            </button>
+            <button type="button" id="btnCancel" class="btn-cancel" onclick="resetForm()">
+                ✖ បោះបង់ការកែប្រែ
             </button>
         </div>
     </form>
@@ -215,7 +184,79 @@
     <div id="alert"></div>
 </div>
 
+<!-- 📊 តារាងបង្ហាញបញ្ជីសារកំណត់ពេល -->
+<div class="container">
+    <h3>បញ្ជីសារដែលបានកំណត់ពេល (Scheduled Messages)</h3>
+    <div class="table-responsive">
+        <table>
+            <thead>
+                <tr>
+                    <th>Channel</th>
+                    <th>សារ</th>
+                    <th>ម៉ោងផ្ញើ</th>
+                    <th>ស្ថានភាព</th>
+                    <th>សកម្មភាព</th>
+                </tr>
+            </thead>
+            <tbody id="scheduleTableBody">
+                <tr><td colspan="5" style="text-align:center;">កំពុងទាញយកទិន្នន័យ...</td></tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
 <script>
+    document.addEventListener('DOMContentLoaded', loadSchedules);
+
+    // ទាញយកបញ្ជី Schedule មកបង្ហាញ
+    async function loadSchedules() {
+        try {
+            const res = await fetch('/api/schedules');
+            const data = await res.json();
+            const tbody = document.getElementById('scheduleTableBody');
+
+            if (!data.success || data.schedules.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;">គ្មានសារកំណត់ពេលនៅឡើយទេ</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = data.schedules.map(item => {
+                const dateStr = new Date(item.schedule_time).toLocaleString('km-KH');
+                let badgeClass = 'badge-pending';
+                if (item.status === 'Sent') badgeClass = 'badge-sent';
+                if (item.status.startsWith('Failed')) badgeClass = 'badge-failed';
+
+                return `
+                    <tr>
+                        <td><strong>${item.channel.toUpperCase()}</strong></td>
+                        <td>${item.message || '[រូបភាព]'}</td>
+                        <td>${dateStr}</td>
+                        <td><span class="badge ${badgeClass}">${item.status}</span></td>
+                        <td>
+                            ${item.status === 'Pending' ? `
+                                <button class="btn-action btn-edit" onclick="editSchedule(${JSON.stringify(item).replace(/"/g, '&quot;')})">កែរ</button>
+                            ` : ''}
+                            <button class="btn-action btn-delete" onclick="deleteSchedule(${item.id})">លុប</button>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        } catch (err) {
+            console.error(err);
+        }
+    }
+
+    // 处理 Submit សម្រាប់ Schedule (បង្កើត ឬ កែប្រែ)
+    function handleScheduleSubmit() {
+        const editId = document.getElementById('editId').value;
+        if (editId) {
+            submitUpdateForm(`/api/schedules/${editId}`);
+        } else {
+            submitForm('/api/notify/schedule');
+        }
+    }
+
+    // បញ្ជូន Form បង្កើតថ្មី
     async function submitForm(url) {
         const form = document.getElementById('notifyForm');
         const formData = new FormData(form);
@@ -226,21 +267,89 @@
         }
 
         try {
-            const response = await fetch(url, {
-                method: 'POST',
-                body: formData
-            });
+            const response = await fetch(url, { method: 'POST', body: formData });
             const result = await response.json();
 
             if (result.success) {
                 showAlert(result.message, true);
-                if (url.includes('send')) form.reset();
+                resetForm();
+                loadSchedules();
             } else {
                 showAlert('បរាជ័យ៖ ' + result.error, false);
             }
         } catch (err) {
             showAlert('មានបញ្ហាក្នុងការតភ្ជាប់ទៅកាន់ Server!', false);
         }
+    }
+
+    // បញ្ជូន Form កែប្រែ (Update)
+    async function submitUpdateForm(url) {
+        const form = document.getElementById('notifyForm');
+        const formData = new FormData(form);
+
+        try {
+            const response = await fetch(url, { method: 'PUT', body: formData });
+            const result = await response.json();
+
+            if (result.success) {
+                showAlert(result.message, true);
+                resetForm();
+                loadSchedules();
+            } else {
+                showAlert('បរាជ័យ៖ ' + result.error, false);
+            }
+        } catch (err) {
+            showAlert('មានបញ្ហាក្នុងការតភ្ជាប់ទៅកាន់ Server!', false);
+        }
+    }
+
+    // ដាក់ទិន្នន័យចូល Form ពេលចុចប៊ូតុង "កែរ"
+    function editSchedule(item) {
+        document.getElementById('editId').value = item.id;
+        document.getElementById('channel').value = item.channel;
+        document.getElementById('phoneNumber').value = item.recipient || '';
+        document.getElementById('message').value = item.message || '';
+        
+        // កំណត់ទម្រង់ម៉ោងសម្រាប់ <input type="datetime-local">
+        const d = new Date(item.schedule_time);
+        d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+        document.getElementById('scheduleTime').value = d.toISOString().slice(0, 16);
+
+        // កែសម្រួល UI
+        document.getElementById('formTitle').textContent = 'កែប្រែកាលវិភាគផ្ញើសារ';
+        document.getElementById('btnSend').style.display = 'none';
+        document.getElementById('btnSchedule').textContent = '💾 រក្សាទុកការកែប្រែ';
+        document.getElementById('btnCancel').style.display = 'inline-flex';
+
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    // លុប Schedule
+    async function deleteSchedule(id) {
+        if (!confirm('តើអ្នកប្រាកដថាចង់លុបកាលវិភាគនេះមែនទេ?')) return;
+
+        try {
+            const res = await fetch(`/api/schedules/${id}`, { method: 'DELETE' });
+            const result = await res.json();
+            if (result.success) {
+                showAlert(result.message, true);
+                loadSchedules();
+            } else {
+                showAlert('បរាជ័យ៖ ' + result.error, false);
+            }
+        } catch (err) {
+            showAlert('មិនអាចលុបបានទេ!', false);
+        }
+    }
+
+    // Reset Form មកធម្មតាវិញ
+    function resetForm() {
+        document.getElementById('notifyForm').reset();
+        document.getElementById('editId').value = '';
+        document.getElementById('formTitle').textContent = 'Notification Hub (Telegram / LINE / WhatsApp)';
+        document.getElementById('btnSend').style.display = 'inline-flex';
+        document.getElementById('btnSchedule').textContent = '⏰ កំណត់ពេល (Schedule)';
+        document.getElementById('btnCancel').style.display = 'none';
     }
 
     function showAlert(msg, isSuccess) {

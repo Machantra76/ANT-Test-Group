@@ -2,7 +2,7 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
-const multer = require('multer'); // ប្រើ multer ក្នុង memoryStorage ដើម្បីយក Buffer
+const multer = require('multer');
 const TelegramBot = require('node-telegram-bot-api');
 const line = require('@line/bot-sdk');
 const { Client, LocalAuth, MessageMedia } = require('whatsapp-web.js');
@@ -18,7 +18,6 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
 
-// រក្សាទុក File ក្នុង Memory ជា Buffer មុននឹងបោះចូល Database
 const upload = multer({ storage: multer.memoryStorage() });
 
 // ==========================================
@@ -107,7 +106,7 @@ const lineConfig = {
 const lineClient = new line.Client(lineConfig);
 
 // ==========================================
-// ⏰ CRON WORKER (ផ្ញើសារតាមកាលវិភាគពី Neon DB)
+// ⏰ CRON WORKER (ផ្ញើសារតាមកាលវិភាគ - កែសម្រួលថ្មីឱ្យអានត្រូវគ្រប់ Condition)
 // ==========================================
 cron.schedule('* * * * *', async () => {
     try {
@@ -125,6 +124,7 @@ cron.schedule('* * * * *', async () => {
             )`
         );
 
+        // ดึงទិន្នន័យដែលដល់ម៉ោង (ប្រៀបធៀបដោយផ្ទាល់ជាមួយ NOW() របស់ Server)
         const result = await pool.query(
             `SELECT * FROM scheduled_messages WHERE schedule_time <= NOW() AND status = 'Pending'`
         );
@@ -138,7 +138,6 @@ cron.schedule('* * * * *', async () => {
             try {
                 let tempFilePath = null;
                 if (item.image_data) {
-                    // បង្កើត File បណ្តោះអាសន្នពី Buffer ក្នុង DB ដើម្បីផ្ញើចេញ
                     const fs = require('fs');
                     const ext = item.image_mimetype ? item.image_mimetype.split('/')[1] : 'jpg';
                     tempFilePath = path.join(__dirname, `temp_${item.id}.${ext}`);
@@ -162,14 +161,11 @@ cron.schedule('* * * * *', async () => {
                         await whatsappClient.sendMessage(formattedNumber, item.message);
                     }
                 } else if (item.channel === 'line') {
-                    // សម្រាប់ LINE បើមានរូបភាព ត្រូវប្រើ Base64 Data URI ឬ URL 
-                    // (អាចផ្ញើ Text ជាជម្រើសចម្បង ឬ Upload ទុកលើ Cloud ប្រសិនបើ LINE ទាមទារ URL)
                     const messages = [];
                     if (item.message) messages.push({ type: 'text', text: item.message });
                     await lineClient.pushMessage(item.recipient, messages);
                 }
 
-                // លុប File បណ្តោះអាសន្នវិញក្រោយផ្ញើរួច
                 if (tempFilePath && require('fs').existsSync(tempFilePath)) {
                     require('fs').unlinkSync(tempFilePath);
                 }
@@ -192,10 +188,9 @@ cron.schedule('* * * * *', async () => {
 });
 
 // ==========================================
-// API ROUTES (រក្សាទុករូបភាពជា Buffer ក្នុង Database)
+// API ROUTES
 // ==========================================
 
-// ១. Telegram API
 app.post('/api/notify/telegram', upload.single('image'), async (req, res) => {
     const { chatId, message } = req.body;
     const targetChatId = chatId || process.env.TELEGRAM_GROUP_CHAT_ID;
@@ -220,7 +215,6 @@ app.post('/api/notify/telegram', upload.single('image'), async (req, res) => {
     }
 });
 
-// ២. WhatsApp API
 app.post('/api/notify/whatsapp', upload.single('image'), async (req, res) => {
     const { phoneNumber, message } = req.body;
     const file = req.file;
@@ -248,11 +242,8 @@ app.post('/api/notify/whatsapp', upload.single('image'), async (req, res) => {
     }
 });
 
-// ៣. LINE API
 app.post('/api/notify/line', upload.single('image'), async (req, res) => {
     const { userId, message } = req.body;
-    const file = req.file;
-
     if (!userId) {
         return res.status(400).json({ success: false, error: 'សូមបញ្ចូល LINE User ID!' });
     }
@@ -270,7 +261,6 @@ app.post('/api/notify/line', upload.single('image'), async (req, res) => {
     }
 });
 
-// ៤. Broadcast API
 app.post('/api/notify/broadcast', upload.single('image'), async (req, res) => {
     const { message, whatsappPhone, lineUserId } = req.body;
     const file = req.file;
@@ -326,7 +316,7 @@ app.post('/api/notify/broadcast', upload.single('image'), async (req, res) => {
     res.json({ success: true, status });
 });
 
-// ៥. API រក្សាទុកកាលវិភាគចូល Database (รวมយករូបភាពដាក់ជា BYTEA)
+// 5. API រក្សាទុកកាលវិភាគ
 app.post('/api/notify/schedule', upload.single('image'), async (req, res) => {
     const { channel, message, scheduleTime, phoneNumber, userId } = req.body;
     const file = req.file;
@@ -351,6 +341,7 @@ app.post('/api/notify/schedule', upload.single('image'), async (req, res) => {
             )`
         );
 
+        // แปลง scheduleTime ឱ្យត្រូវ Format ស្ដង់ដារ Date Object សម្រាប់ PostgreSQL
         const formattedScheduleTime = new Date(scheduleTime);
 
         await pool.query(
@@ -364,7 +355,6 @@ app.post('/api/notify/schedule', upload.single('image'), async (req, res) => {
     }
 });
 
-// ៦. API ទាញយក Logs
 app.get('/api/logs', async (req, res) => {
     try {
         const result = await pool.query('SELECT * FROM notification_logs ORDER BY created_at DESC LIMIT 50');

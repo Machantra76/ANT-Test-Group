@@ -163,7 +163,6 @@ async function processPendingSchedules() {
     const result = await pool.query(
         `SELECT * FROM scheduled_messages WHERE status = 'Pending'`
     );
-...
     const pendingTasks = result.rows;
     if (pendingTasks.length === 0) {
         return { count: 0 };

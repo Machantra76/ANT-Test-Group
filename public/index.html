@@ -3,140 +3,106 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ប្រព័ន្ធគ្រប់គ្រងការជូនដំណឹង - Multi-Channel Notification Hub</title>
-    <link href="https://fonts.googleapis.com/css2?family=Kantumruy+Pro:wght@300;400;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <title>Notification Hub Dashboard</title>
     <style>
-        body { font-family: 'Kantumruy Pro', sans-serif; background-color: #f0f4f8; margin: 0; padding: 0; color: #333; }
-        header { background: linear-gradient(135deg, #1e3c72, #2a5298); color: white; padding: 20px; text-align: center; }
-        .container { max-width: 800px; margin: 30px auto; background: white; padding: 25px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
-        .form-group { margin-bottom: 20px; }
-        label { display: block; font-weight: 600; margin-bottom: 8px; }
-        input, textarea, select { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 6px; font-family: 'Kantumruy Pro', sans-serif; box-sizing: border-box; }
-        .btn { background: #10b981; color: white; border: none; padding: 12px 20px; border-radius: 6px; cursor: pointer; font-size: 16px; font-weight: 600; width: 100%; display: flex; align-items: center; justify-content: center; gap: 10px; }
-        .btn:hover { background: #059669; }
-        .status-box { margin-top: 20px; padding: 15px; border-radius: 6px; display: none; }
-        .status-success { background: #d1fae5; color: #065f46; border: 1px solid #a7f3d0; }
-        .status-error { background: #fee2e2; color: #991b1b; border: 1px solid #fca5a5; }
+        * { box-sizing: border-box; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        body { background-color: #f0f2f5; margin: 0; padding: 20px; }
+        .container { max-width: 600px; margin: 0 auto; background: #fff; padding: 25px; border-radius: 10px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+        h2 { text-align: center; color: #1c2d42; margin-bottom: 20px; }
+        .form-group { margin-bottom: 15px; }
+        label { display: block; margin-bottom: 6px; font-weight: 600; color: #444; }
+        select, input, textarea { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 6px; font-size: 14px; }
+        .btn-group { display: flex; gap: 10px; margin-top: 20px; }
+        button { flex: 1; padding: 12px; border: none; border-radius: 6px; font-size: 15px; font-weight: bold; cursor: pointer; color: white; transition: 0.3s; }
+        .btn-send { background-color: #28a745; }
+        .btn-send:hover { background-color: #218838; }
+        .btn-schedule { background-color: #007bff; }
+        .btn-schedule:hover { background-color: #0069d9; }
+        #alert { margin-top: 15px; padding: 10px; border-radius: 6px; display: none; text-align: center; font-weight: bold; }
+        .alert-success { background-color: #d4edda; color: #155724; }
+        .alert-error { background-color: #f8d7da; color: #721c24; }
     </style>
 </head>
 <body>
-    <header>
-        <h1 style="margin: 0; font-size: 22px;">📢 Multi-Channel Notification Hub</h1>
-        <p style="margin: 5px 0 0 0; opacity: 0.9;">ប្រព័ន្ធផ្ញើសារជូនដំណឹងទៅកាន់ Telegram, WhatsApp, & LINE</p>
-    </header>
 
-    <div class="container">
-        <h2>ផ្ញើសារជូនដំណឹង (Send Notification)</h2>
-        
+<div class="container">
+    <h2>Notification Hub (Telegram / LINE / WhatsApp)</h2>
+    <form id="notifyForm" enctype="multipart/form-data">
         <div class="form-group">
-            <label>ជ្រើសរើស Channel ត្រូវផ្ញើ៖</label>
-            <select id="channelSelect" onchange="toggleInputs()">
-                <option value="telegram">Telegram Group</option>
+            <label for="channel">ជ្រើសរើសប្រព័ន្ធ (Channel):</label>
+            <select id="channel" name="channel" required>
+                <option value="telegram">Telegram</option>
                 <option value="whatsapp">WhatsApp</option>
                 <option value="line">LINE</option>
-                <option value="broadcast">Broadcast គ្រប់ Channel</option>
+                <option value="broadcast">Broadcast ទាំងអស់</option>
             </select>
         </div>
 
-        <div class="form-group" id="whatsappInput" style="display: none;">
-            <label>លេខទូរស័ព្ទ WhatsApp (ឧទាហរណ៍៖ 85512345678)៖</label>
-            <input type="text" id="phoneNum" placeholder="85512345678">
-        </div>
-
-        <div class="form-group" id="lineInput" style="display: none;">
-            <label>LINE User ID / Group ID៖</label>
-            <input type="text" id="lineId" placeholder="U1234567890abcdef...">
+        <div class="form-group">
+            <label for="phoneNumber">លេខទូរស័ព្ទ / Group / Chat ID (ជម្រើសបន្ថែម):</label>
+            <input type="text" id="phoneNumber" name="phoneNumber" placeholder="ឧទាហរណ៍៖ 85512345678 ឬ Chat ID">
         </div>
 
         <div class="form-group">
-            <label>អត្ថបទសារ (Message)៖</label>
-            <textarea id="messageText" rows="5" placeholder="វាយបញ្ចូលអត្ថបទសារ..."></textarea>
+            <label for="message">ខ្លឹមសារសារ (Message):</label>
+            <textarea id="message" name="message" rows="4" placeholder="វាយអត្ថបទសារទីនេះ..."></textarea>
         </div>
 
         <div class="form-group">
-            <label>แนបឯកសាររូបភាព (Image File - ជម្រើសបន្ថែម)៖</label>
-            <input type="file" id="imageFile" accept="image/*">
+            <label for="image">ភ្ជាប់រូបភាព (Image - Optional):</label>
+            <input type="file" id="image" name="image" accept="image/*">
         </div>
 
         <div class="form-group">
-            <label>
-                <input type="checkbox" id="enableSchedule" onchange="toggleScheduleInput()" style="width: auto; margin-right: 5px;">
-                កំណត់ពេលផ្ញើសារស្វ័យប្រវត្តិ (Schedule Time)
-            </label>
-            <input type="datetime-local" id="scheduleTime" style="display: none; margin-top: 10px;">
+            <label for="scheduleTime">ម៉ោងត្រូវផ្ញើ (កំណត់ពេល Schedule):</label>
+            <input type="datetime-local" id="scheduleTime" name="scheduleTime">
         </div>
 
-        <button class="btn" onclick="sendNotification()"><i class="fa-solid fa-paper-plane"></i> បញ្ជូនសារ</button>
-        <div id="statusBox" class="status-box"></div>
-    </div>
+        <div class="btn-group">
+            <button type="button" class="btn-send" onclick="submitForm('/api/notify/send')">ផ្ញើភ្លាមៗ (Send Now)</button>
+            <button type="button" class="btn-schedule" onclick="submitForm('/api/notify/schedule')">កំណត់ពេល (Schedule)</button>
+        </div>
+    </form>
 
-    <script>
-        function toggleInputs() {
-            const channel = document.getElementById('channelSelect').value;
-            document.getElementById('whatsappInput').style.display = (channel === 'whatsapp' || channel === 'broadcast') ? 'block' : 'none';
-            document.getElementById('lineInput').style.display = (channel === 'line' || channel === 'broadcast') ? 'block' : 'none';
+    <div id="alert"></div>
+</div>
+
+<script>
+    async function submitForm(url) {
+        const form = document.getElementById('notifyForm');
+        const formData = new FormData(form);
+        const alertDiv = document.getElementById('alert');
+
+        if (url.includes('schedule') && !document.getElementById('scheduleTime').value) {
+            showAlert('សូមជ្រើសរើសម៉ោងសម្រាប់ការកំណត់ពេល (Schedule)!', false);
+            return;
         }
 
-        function toggleScheduleInput() {
-            const isChecked = document.getElementById('enableSchedule').checked;
-            document.getElementById('scheduleTime').style.display = isChecked ? 'block' : 'none';
+        try {
+            const response = await fetch(url, {
+                method: 'POST',
+                body: formData
+            });
+            const result = await response.json();
+
+            if (result.success) {
+                showAlert(result.message, true);
+                if (url.includes('send')) form.reset();
+            } else {
+                showAlert('បរាជ័យ៖ ' + result.error, false);
+            }
+        } catch (err) {
+            showAlert('មានបញ្ហាក្នុងការតភ្ជាប់ទៅកាន់ Server!', false);
         }
+    }
 
-        async function sendNotification() {
-            const channel = document.getElementById('channelSelect').value;
-            const message = document.getElementById('messageText').value;
-            const phone = document.getElementById('phoneNum').value;
-            const lineId = document.getElementById('lineId').value;
-            const imageFile = document.getElementById('imageFile').files[0];
-            const isScheduled = document.getElementById('enableSchedule').checked;
-            const scheduleTime = document.getElementById('scheduleTime').value;
-            const statusBox = document.getElementById('statusBox');
+    function showAlert(msg, isSuccess) {
+        const alertDiv = document.getElementById('alert');
+        alertDiv.style.display = 'block';
+        alertDiv.className = isSuccess ? 'alert-success' : 'alert-error';
+        alertDiv.textContent = msg;
+    }
+</script>
 
-            if (!message.trim() && !imageFile) {
-                alert("សូមបញ្ចូលអត្ថបទសារ ឬแนបរូបភាពជាមុនសិន!");
-                return;
-            }
-
-            if (isScheduled && !scheduleTime) {
-                alert("សូមជ្រើសរើសពេលវេលាដែលត្រូវផ្ញើ!");
-                return;
-            }
-
-            statusBox.style.display = 'none';
-
-            const formData = new FormData();
-            formData.append('channel', channel);
-            formData.append('message', message);
-            if (phone) formData.append('phoneNumber', phone);
-            if (lineId) formData.append('userId', lineId);
-            if (imageFile) formData.append('image', imageFile);
-
-            let endpoint = '/api/notify/send';
-
-            if (isScheduled) {
-                formData.append('scheduleTime', scheduleTime);
-                endpoint = '/api/notify/schedule';
-            }
-
-            try {
-                const response = await fetch(endpoint, { method: 'POST', body: formData });
-                const result = await response.json();
-                statusBox.style.display = 'block';
-
-                if (response.ok && result.success) {
-                    statusBox.className = 'status-box status-success';
-                    statusBox.innerHTML = `✅ <b>ជោគជ័យ៖</b> ${result.message}`;
-                } else {
-                    statusBox.className = 'status-box status-error';
-                    statusBox.innerHTML = `❌ <b>កំហុស៖</b> ${result.error}`;
-                }
-            } catch (err) {
-                statusBox.style.display = 'block';
-                statusBox.className = 'status-box status-error';
-                statusBox.innerHTML = `❌ <b>កំហុសប្រព័ន្ធ៖</b> ${err.message}`;
-            }
-        }
-    </script>
 </body>
 </html>

@@ -140,17 +140,13 @@ async function addTextToImage(imageBuffer, text) {
 }
 
 // ៧. Core Function សម្រាប់បញ្ជូនសារតាម Platform (พร้อมระบบبិតអត្ថបទលើរូបភាព)
+// ៧. Core Function សម្រាប់បញ្ជូនសារតាម Platform (ផ្ញើអត្ថបទទៅមុន រួចផ្ញើរូបភាពតាមក្រោយ)
 async function sendNotification(channel, recipient, message, fileBuffer, fileMime) {
-    let processedBuffer = fileBuffer;
-    if (fileBuffer && message) {
-        processedBuffer = await addTextToImage(fileBuffer, message);
-    }
-
     let tempFilePath = null;
-    if (processedBuffer) {
+    if (fileBuffer) {
         const ext = fileMime ? fileMime.split('/')[1] : 'jpg';
         tempFilePath = path.join(__dirname, `temp_${Date.now()}.${ext}`);
-        fs.writeFileSync(tempFilePath, processedBuffer);
+        fs.writeFileSync(tempFilePath, fileBuffer);
     }
 
     try {
@@ -158,10 +154,13 @@ async function sendNotification(channel, recipient, message, fileBuffer, fileMim
         if (channel === 'telegram' || channel === 'broadcast') {
             const targetId = recipient || process.env.TELEGRAM_GROUP_CHAT_ID;
             if (targetId && telegramBot) {
+                // ១. ផ្ញើអត្ថបទ (Message) ទៅមុន
+                if (message) {
+                    await telegramBot.sendMessage(targetId, message, { parse_mode: 'HTML' });
+                }
+                // ២. ផ្ញើរូបភាព (Image) តាមក្រោយ
                 if (tempFilePath) {
-                    await telegramBot.sendPhoto(targetId, tempFilePath, { caption: message || '', parse_mode: 'HTML' });
-                } else {
-                    await telegramBot.sendMessage(targetId, message || '', { parse_mode: 'HTML' });
+                    await telegramBot.sendPhoto(targetId, tempFilePath);
                 }
                 await saveLog('Telegram', targetId, message || '[Photo]', 'Success');
             }
@@ -172,11 +171,14 @@ async function sendNotification(channel, recipient, message, fileBuffer, fileMim
             const cleanNumber = (recipient || '').replace(/[^0-9]/g, '');
             if (cleanNumber) {
                 const formattedNumber = `${cleanNumber}@c.us`;
-                if (processedBuffer) {
-                    const media = new MessageMedia(fileMime || 'image/jpeg', processedBuffer.toString('base64'), 'image.jpg');
-                    await whatsappClient.sendMessage(formattedNumber, media, { caption: message || '' });
-                } else {
+                // ១. ផ្ញើអត្ថបទ (Message) ទៅមុន
+                if (message) {
                     await whatsappClient.sendMessage(formattedNumber, message);
+                }
+                // ២. ផ្ញើរូបភាព (Image) តាមក្រោយ
+                if (fileBuffer) {
+                    const media = new MessageMedia(fileMime, fileBuffer.toString('base64'), 'image.jpg');
+                    await whatsappClient.sendMessage(formattedNumber, media);
                 }
                 await saveLog('WhatsApp', recipient, message || '[Photo]', 'Success');
             }
@@ -187,7 +189,9 @@ async function sendNotification(channel, recipient, message, fileBuffer, fileMim
             const targetLineId = recipient || process.env.LINE_USER_ID;
             if (targetLineId && lineClient) {
                 const messages = [];
+                // ១. ផ្ញើអត្ថបទទៅមុន
                 if (message) messages.push({ type: 'text', text: message });
+                // ២. ផ្ញើរូបភាពតាមក្រោយ (LINE ត្រូវការ Image URL ផ្ទាល់ ដូច្នេះបើផ្ញើ Buffer គឺផ្ញើអត្ថបទ ឬត្រូវរៀបចំ URL)
                 if (messages.length > 0) {
                     await lineClient.pushMessage(targetLineId, messages);
                     await saveLog('LINE', targetLineId, message || '[Photo]', 'Success');

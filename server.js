@@ -20,9 +20,6 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 const upload = multer({ storage: multer.memoryStorage() });
 
-// ==========================================
-// 🟢 POSTGRESQL DATABASE CONNECTION (Neon DB)
-// ==========================================
 const pool = new Pool({
     connectionString: process.env.DATABASE_URL,
     ssl: { rejectUnauthorized: false }
@@ -40,9 +37,22 @@ async function initDatabase() {
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         `);
-        console.log('✅ បានតភ្ជាប់ និងបង្កើត Table notification_logs ក្នុង Neon DB ជោគជ័យ!');
+        await pool.query(`
+            CREATE TABLE IF NOT EXISTS scheduled_messages (
+                id SERIAL PRIMARY KEY,
+                channel VARCHAR(50),
+                recipient TEXT,
+                message TEXT,
+                image_data BYTEA,
+                image_mimetype VARCHAR(100),
+                schedule_time TIMESTAMP,
+                status VARCHAR(50) DEFAULT 'Pending',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        `);
+        console.log('✅ បានតភ្ជាប់ និងបង្កើត Tables ក្នុង Neon DB ជោគជ័យ!');
     } catch (err) {
-        console.error('❌ កំហុសក្នុងការតភ្ជាប់ Database:', err.message);
+        console.error('❌ កំហុស Database:', err.message);
     }
 }
 initDatabase();
@@ -54,26 +64,19 @@ async function saveLog(channel, recipient, message, status) {
             [channel, recipient, message, status]
         );
     } catch (err) {
-        console.error('❌ Error saving log to DB:', err.message);
+        console.error('❌ Error saving log:', err.message);
     }
 }
 
-// ==========================================
-// ១. TELEGRAM BOT INITIALIZATION
-// ==========================================
+// Telegram Setup
 const telegramToken = process.env.TELEGRAM_BOT_TOKEN;
 let telegramBot = null;
-
 if (telegramToken && telegramToken !== 'YOUR_TELEGRAM_BOT_TOKEN_HERE') {
     telegramBot = new TelegramBot(telegramToken, { polling: true });
-    console.log('✅ បានភ្ជាប់ទៅកាន់ Telegram Bot ដោយជោគជ័យ!');
-} else {
-    console.log('⚠️ សូមកំណត់ TELEGRAM_BOT_TOKEN នៅក្នុង .env');
+    console.log('✅ Telegram Bot បានតភ្ជាប់!');
 }
 
-// ==========================================
-// ២. WHATSAPP WEB CLIENT INITIALIZATION
-// ==========================================
+// WhatsApp Setup
 const whatsappClient = new Client({
     authStrategy: new LocalAuth(),
     puppeteer: {
@@ -82,274 +85,126 @@ const whatsappClient = new Client({
         args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu']
     }
 });
+whatsappClient.on('qr', (qr) => qrcode.generate(qr, { small: true }));
+whatsappClient.on('ready', () => console.log('✅ WhatsApp Client រួចរាល់!'));
+whatsappClient.initialize().catch(err => console.error('WhatsApp Error:', err.message));
 
-whatsappClient.on('qr', (qr) => {
-    console.log('📲 សូមស្កេន QR Code នៅលើ WhatsApp៖');
-    qrcode.generate(qr, { small: true });
-});
-
-whatsappClient.on('ready', () => {
-    console.log('✅ បានភ្ជាប់ទៅកាន់ WhatsApp Web Client រួចរាល់!');
-});
-
-whatsappClient.initialize().catch(err => {
-    console.error('⚠️ WhatsApp Client initialization warning:', err.message);
-});
-
-// ==========================================
-// ៣. LINE BOT INITIALIZATION
-// ==========================================
-const lineConfig = {
+// LINE Setup
+const lineClient = new line.Client({
     channelAccessToken: process.env.LINE_CHANNEL_ACCESS_TOKEN || '',
     channelSecret: process.env.LINE_CHANNEL_SECRET || ''
-};
-const lineClient = new line.Client(lineConfig);
+});
 
-// ==========================================
-// ⏰ CRON WORKER (ផ្ញើសារតាមកាលវិភាគ - កែសម្រួលថ្មីឱ្យអានត្រូវគ្រប់ Condition)
-// ==========================================
+// ฟังก์ชันสำหรับส่งข้อความจริงไปยังแต่ละช่องทาง
+async function executeNotification(channel, recipient, message, file) {
+    let tempFilePath = null;
+    if (file && file.buffer) {
+        const fs = require('fs');
+        const ext = file.mimetype ? file.mimetype.split('/')[1] : 'jpg';
+        tempFilePath = path.join(__dirname, `temp_${Date.now()}.${ext}`);
+        fs.writeFileSync(tempFilePath, file.buffer);
+    }
+
+    if (channel === 'telegram' || channel === 'broadcast') {
+        const targetChatId = recipient || process.env.TELEGRAM_GROUP_CHAT_ID;
+        if (targetChatId) {
+            if (tempFilePath) {
+                await telegramBot.sendPhoto(targetChatId, tempFilePath, { caption: message || '', parse_mode: 'HTML' });
+            } else {
+                await telegramBot.sendMessage(targetChatId, message || '', { parse_mode: 'HTML' });
+            }
+            await saveLog('Telegram', targetChatId, message || '[Photo]', 'Success');
+        }
+    }
+
+    if (channel === 'whatsapp' || (channel === 'broadcast' && recipient)) {
+        const cleanNumber = (recipient || '').replace(/[^0-9]/g, '');
+        if (cleanNumber) {
+            const formattedNumber = `${cleanNumber}@c.us`;
+            if (tempFilePath) {
+                const media = new MessageMedia(file.mimetype, file.buffer.toString('base64'), file.originalname);
+                await whatsappClient.sendMessage(formattedNumber, media, { caption: message || '' });
+            } else {
+                await whatsappClient.sendMessage(formattedNumber, message);
+            }
+            await saveLog('WhatsApp', recipient, message || '[Photo]', 'Success');
+        }
+    }
+
+    if (channel === 'line' || channel === 'broadcast') {
+        if (recipient && lineClient) {
+            const messages = [];
+            if (message) messages.push({ type: 'text', text: message });
+            if (messages.length > 0) {
+                await lineClient.pushMessage(recipient, messages);
+                await saveLog('LINE', recipient, message || '[Photo]', 'Success');
+            }
+        }
+    }
+
+    if (tempFilePath && require('fs').existsSync(tempFilePath)) {
+        require('fs').unlinkSync(tempFilePath);
+    }
+}
+
+// ⏰ CRON WORKER រៀងរាល់ ១ នាទីម្តង (ផ្ញើសារតាមកាលវិភាគ)
 cron.schedule('* * * * *', async () => {
     try {
-        await pool.query(
-            `CREATE TABLE IF NOT EXISTS scheduled_messages (
-                id SERIAL PRIMARY KEY,
-                channel VARCHAR(50),
-                recipient TEXT,
-                message TEXT,
-                image_data BYTEA,
-                image_mimetype VARCHAR(100),
-                schedule_time TIMESTAMP,
-                status VARCHAR(50) DEFAULT 'Pending',
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )`
-        );
-
-        // ดึงទិន្នន័យដែលដល់ម៉ោង (ប្រៀបធៀបដោយផ្ទាល់ជាមួយ NOW() របស់ Server)
         const result = await pool.query(
             `SELECT * FROM scheduled_messages WHERE schedule_time <= NOW() AND status = 'Pending'`
         );
 
-        const pendingMessages = result.rows;
-        if (pendingMessages.length === 0) return;
+        if (result.rows.length === 0) return;
+        console.log(`⏰ រកឃើញសារស្វ័យប្រវត្តិចំនួន ${result.rows.length} ត្រូវផ្ញើ!`);
 
-        console.log(`⏰ រកឃើញសារដែលត្រូវផ្ញើស្វ័យប្រវត្តិចំនួន ${pendingMessages.length} ម៉ោង!`);
-
-        for (const item of pendingMessages) {
+        for (const item of result.rows) {
             try {
-                let tempFilePath = null;
+                let fileObj = null;
                 if (item.image_data) {
-                    const fs = require('fs');
-                    const ext = item.image_mimetype ? item.image_mimetype.split('/')[1] : 'jpg';
-                    tempFilePath = path.join(__dirname, `temp_${item.id}.${ext}`);
-                    fs.writeFileSync(tempFilePath, item.image_data);
+                    fileObj = { buffer: item.image_data, mimetype: item.image_mimetype, originalname: 'image.jpg' };
                 }
-
-                if (item.channel === 'telegram') {
-                    const targetChatId = item.recipient || process.env.TELEGRAM_GROUP_CHAT_ID;
-                    if (tempFilePath) {
-                        await telegramBot.sendPhoto(targetChatId, tempFilePath, { caption: item.message || '', parse_mode: 'HTML' });
-                    } else {
-                        await telegramBot.sendMessage(targetChatId, item.message || '', { parse_mode: 'HTML' });
-                    }
-                } else if (item.channel === 'whatsapp') {
-                    const cleanNumber = item.recipient.replace(/[^0-9]/g, '');
-                    const formattedNumber = `${cleanNumber}@c.us`;
-                    if (tempFilePath) {
-                        const media = MessageMedia.fromFilePath(tempFilePath);
-                        await whatsappClient.sendMessage(formattedNumber, media, { caption: item.message || '' });
-                    } else {
-                        await whatsappClient.sendMessage(formattedNumber, item.message);
-                    }
-                } else if (item.channel === 'line') {
-                    const messages = [];
-                    if (item.message) messages.push({ type: 'text', text: item.message });
-                    await lineClient.pushMessage(item.recipient, messages);
-                }
-
-                if (tempFilePath && require('fs').existsSync(tempFilePath)) {
-                    require('fs').unlinkSync(tempFilePath);
-                }
-
+                await executeNotification(item.channel, item.recipient, item.message, fileObj);
                 await pool.query("UPDATE scheduled_messages SET status = 'Sent' WHERE id = $1", [item.id]);
-                await saveLog(item.channel, item.recipient, item.message || '[Photo]', 'Success (Scheduled)');
-                console.log(`✅ បានផ្ញើសារស្វ័យប្រវត្តិ ID: ${item.id} ជោគជ័យ!`);
-
+                console.log(`✅ បានផ្ញើសារ Schedule ID: ${item.id} ជោគជ័យ!`);
             } catch (err) {
-                console.error(`❌ បរាជ័យក្នុងការផ្ញើសារ ID ${item.id}:`, err.message);
+                console.error(`❌ បរាជ័យ Schedule ID ${item.id}:`, err.message);
                 await pool.query("UPDATE scheduled_messages SET status = $1 WHERE id = $2", [`Failed: ${err.message}`, item.id]);
             }
         }
     } catch (err) {
-        console.error('❌ កំហុសក្នុង Cron Worker:', err.message);
+        console.error('❌ Cron Error:', err.message);
     }
-}, {
-    scheduled: true,
-    timezone: "Asia/Phnom_Penh"
-});
+}, { scheduled: true, timezone: "Asia/Phnom_Penh" });
 
-// ==========================================
-// API ROUTES
-// ==========================================
-
-app.post('/api/notify/telegram', upload.single('image'), async (req, res) => {
-    const { chatId, message } = req.body;
-    const targetChatId = chatId || process.env.TELEGRAM_GROUP_CHAT_ID;
-    const file = req.file;
-
-    try {
-        let tempFilePath = null;
-        if (file) {
-            const fs = require('fs');
-            tempFilePath = path.join(__dirname, `temp_${Date.now()}.${file.mimetype.split('/')[1]}`);
-            fs.writeFileSync(tempFilePath, file.buffer);
-            await telegramBot.sendPhoto(targetChatId, tempFilePath, { caption: message || '', parse_mode: 'HTML' });
-            fs.unlinkSync(tempFilePath);
-        } else {
-            await telegramBot.sendMessage(targetChatId, message || '', { parse_mode: 'HTML' });
-        }
-        await saveLog('Telegram', targetChatId, message || '[Photo]', 'Success');
-        res.json({ success: true, message: 'បានផ្ញើសារទៅ Telegram ជោគជ័យ!' });
-    } catch (err) {
-        await saveLog('Telegram', targetChatId, message || '[Photo]', `Failed: ${err.message}`);
-        res.status(500).json({ success: false, error: err.message });
-    }
-});
-
-app.post('/api/notify/whatsapp', upload.single('image'), async (req, res) => {
-    const { phoneNumber, message } = req.body;
-    const file = req.file;
-
-    if (!phoneNumber) {
-        return res.status(400).json({ success: false, error: 'សូមបញ្ចូលលេខទូរស័ព្ទ WhatsApp!' });
-    }
-
-    try {
-        const cleanNumber = phoneNumber.replace(/[^0-9]/g, '');
-        const formattedNumber = `${cleanNumber}@c.us`;
-
-        if (file) {
-            const media = new MessageMedia(file.mimetype, file.buffer.toString('base64'), file.originalname);
-            await whatsappClient.sendMessage(formattedNumber, media, { caption: message || '' });
-        } else {
-            await whatsappClient.sendMessage(formattedNumber, message);
-        }
-
-        await saveLog('WhatsApp', phoneNumber, message || '[Photo]', 'Success');
-        res.json({ success: true, message: 'បានផ្ញើសារទៅ WhatsApp ជោគជ័យ!' });
-    } catch (err) {
-        await saveLog('WhatsApp', phoneNumber, message || '[Photo]', `Failed: ${err.message}`);
-        res.status(500).json({ success: false, error: err.message });
-    }
-});
-
-app.post('/api/notify/line', upload.single('image'), async (req, res) => {
-    const { userId, message } = req.body;
-    if (!userId) {
-        return res.status(400).json({ success: false, error: 'សូមបញ្ចូល LINE User ID!' });
-    }
-
-    try {
-        const messages = [];
-        if (message) messages.push({ type: 'text', text: message });
-
-        await lineClient.pushMessage(userId, messages);
-        await saveLog('LINE', userId, message || '[Photo]', 'Success');
-        res.json({ success: true, message: 'បានផ្ញើសារទៅ LINE ជោគជ័យ!' });
-    } catch (err) {
-        await saveLog('LINE', userId, message || '[Photo]', `Failed: ${err.message}`);
-        res.status(500).json({ success: false, error: err.message });
-    }
-});
-
-app.post('/api/notify/broadcast', upload.single('image'), async (req, res) => {
-    const { message, whatsappPhone, lineUserId } = req.body;
-    const file = req.file;
-    const status = {};
-
-    if (telegramBot) {
-        const tChatId = process.env.TELEGRAM_GROUP_CHAT_ID;
-        try {
-            if (file) {
-                const fs = require('fs');
-                const tempFilePath = path.join(__dirname, `temp_bc_${Date.now()}.${file.mimetype.split('/')[1]}`);
-                fs.writeFileSync(tempFilePath, file.buffer);
-                await telegramBot.sendPhoto(tChatId, tempFilePath, { caption: message || '', parse_mode: 'HTML' });
-                fs.unlinkSync(tempFilePath);
-            } else {
-                await telegramBot.sendMessage(tChatId, message || '', { parse_mode: 'HTML' });
-            }
-            await saveLog('Telegram (Broadcast)', tChatId, message || '[Photo]', 'Success');
-            status.telegram = 'ជោគជ័យ';
-        } catch (e) {
-            status.telegram = `បរាជ័យ: ${e.message}`;
-        }
-    }
-
-    if (whatsappPhone) {
-        try {
-            const cleanNumber = whatsappPhone.replace(/[^0-9]/g, '');
-            if (file) {
-                const media = new MessageMedia(file.mimetype, file.buffer.toString('base64'), file.originalname);
-                await whatsappClient.sendMessage(`${cleanNumber}@c.us`, media, { caption: message || '' });
-            } else {
-                await whatsappClient.sendMessage(`${cleanNumber}@c.us`, message);
-            }
-            await saveLog('WhatsApp (Broadcast)', whatsappPhone, message || '[Photo]', 'Success');
-            status.whatsapp = 'ជោគជ័យ';
-        } catch (e) {
-            status.whatsapp = `បរាជ័យ: ${e.message}`;
-        }
-    }
-
-    if (lineUserId && lineConfig.channelAccessToken) {
-        try {
-            const messages = [];
-            if (message) messages.push({ type: 'text', text: message });
-            await lineClient.pushMessage(lineUserId, messages);
-            await saveLog('LINE (Broadcast)', lineUserId, message || '[Photo]', 'Success');
-            status.line = 'ជោគជ័យ';
-        } catch (e) {
-            status.line = `បរាជ័យ: ${e.message}`;
-        }
-    }
-
-    res.json({ success: true, status });
-});
-
-// 5. API រក្សាទុកកាលវិភាគ
-app.post('/api/notify/schedule', upload.single('image'), async (req, res) => {
-    const { channel, message, scheduleTime, phoneNumber, userId } = req.body;
-    const file = req.file;
+// API ផ្ញើសារភ្លាមៗ
+app.post('/api/notify/send', upload.single('image'), async (req, res) => {
+    const { channel, message, phoneNumber, userId } = req.body;
     const recipient = phoneNumber || userId || process.env.TELEGRAM_GROUP_CHAT_ID;
 
-    if ((!message && !file) || !scheduleTime) {
-        return res.status(400).json({ success: false, error: 'សូមបញ្ជាក់សារ/រូបភាព និងពេលវេលា!' });
+    try {
+        await executeNotification(channel, recipient, message, req.file);
+        res.json({ success: true, message: 'បានបញ្ជូនសារដោយជោគជ័យ!' });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// API រក្សាទុកកាលវិភាគ (Schedule)
+app.post('/api/notify/schedule', upload.single('image'), async (req, res) => {
+    const { channel, message, scheduleTime, phoneNumber, userId } = req.body;
+    const recipient = phoneNumber || userId || process.env.TELEGRAM_GROUP_CHAT_ID;
+
+    if (!scheduleTime) {
+        return res.status(400).json({ success: false, error: 'សូមកំណត់ពេលវេលាឱ្យបានត្រឹមត្រូវ!' });
     }
 
     try {
-        await pool.query(
-            `CREATE TABLE IF NOT EXISTS scheduled_messages (
-                id SERIAL PRIMARY KEY,
-                channel VARCHAR(50),
-                recipient TEXT,
-                message TEXT,
-                image_data BYTEA,
-                image_mimetype VARCHAR(100),
-                schedule_time TIMESTAMP,
-                status VARCHAR(50) DEFAULT 'Pending',
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )`
-        );
-
-        // แปลง scheduleTime ឱ្យត្រូវ Format ស្ដង់ដារ Date Object សម្រាប់ PostgreSQL
-        const formattedScheduleTime = new Date(scheduleTime);
-
+        const scheduleDate = new Date(scheduleTime);
         await pool.query(
             'INSERT INTO scheduled_messages (channel, recipient, message, image_data, image_mimetype, schedule_time) VALUES ($1, $2, $3, $4, $5, $6)',
-            [channel, recipient, message || '', file ? file.buffer : null, file ? file.mimetype : null, formattedScheduleTime]
+            [channel, recipient, message || '', req.file ? req.file.buffer : null, req.file ? req.file.mimetype : null, scheduleDate]
         );
-
-        res.json({ success: true, message: `បានកំណត់ពេលផ្ញើសារសម្រាប់ថ្ងៃទី ${scheduleTime} ជោគជ័យ!` });
+        res.json({ success: true, message: `បានកំណត់ពេលផ្ញើសារសម្រាប់ថ្ងៃទី ${scheduleTime} រួចរាល់!` });
     } catch (err) {
         res.status(500).json({ success: false, error: err.message });
     }
@@ -364,10 +219,6 @@ app.get('/api/logs', async (req, res) => {
     }
 });
 
-app.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, 'public', 'index.html'));
-});
+app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 
-app.listen(PORT, () => {
-    console.log(`🚀 Notification Hub Server កំពុងដំណើរការលើ http://localhost:${PORT}`);
-});
+app.listen(PORT, () => console.log(`🚀 Server រត់លើ http://localhost:${PORT}`));

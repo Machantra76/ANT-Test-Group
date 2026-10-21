@@ -321,11 +321,3 @@ app.get('/api/logs', async (req, res) => {
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 
 app.listen(PORT, () => console.log(`🚀 Server កំពុងរត់លើ http://localhost:${PORT}`));
-// កំណត់ឱ្យ Server ឆែកសាររង់ចាំស្វ័យប្រវត្តិរៀងរាល់ 1 នាទីម្ដង
-setInterval(async () => {
-    try {
-        await processPendingSchedules();
-    } catch (err) {
-        console.error('❌ [Auto Cron Error]:', err.message);
-    }
-}, 60 * 1000); // 60 วินาที = 1 នាទី

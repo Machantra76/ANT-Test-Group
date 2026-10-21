@@ -115,13 +115,11 @@
             <textarea id="messageText" rows="5" placeholder="វាយបញ្ចូលអត្ថបទសារ ឬការជូនដំណឹងនៅទីនេះ..."></textarea>
         </div>
 
-        <!-- 🟢 ប្ដូរពី URL มาជា File Upload រូបភាព -->
         <div class="form-group">
             <label>แนបឯកសាររូបភាព (Upload Image File)៖</label>
             <input type="file" id="imageFile" accept="image/*">
         </div>
 
-        <!-- 🟢 កំណត់ពេលផ្ញើសារ -->
         <div class="form-group">
             <label>
                 <input type="checkbox" id="enableSchedule" onchange="toggleScheduleInput()" style="width: auto; margin-right: 5px;">
@@ -169,7 +167,6 @@
 
             statusBox.style.display = 'none';
 
-            // ប្រើ FormData សម្រាប់ផ្ញើទាំង Text និង File ក្នុងពេលតែមួយ
             const formData = new FormData();
             formData.append('message', message);
             if (phone) formData.append('phoneNumber', phone);
@@ -179,26 +176,22 @@
             }
             if (isScheduled) {
                 formData.append('scheduleTime', scheduleTime);
+                formData.append('channel', channel);
             }
 
             let endpoint = '/api/notify/telegram';
-            if (channel === 'whatsapp') {
-                endpoint = '/api/notify/whatsapp';
-            } else if (channel === 'line') {
-                endpoint = '/api/notify/line';
-            } else if (channel === 'broadcast') {
-                endpoint = '/api/notify/broadcast';
-            }
+            if (channel === 'whatsapp') endpoint = '/api/notify/whatsapp';
+            else if (channel === 'line') endpoint = '/api/notify/line';
+            else if (channel === 'broadcast') endpoint = '/api/notify/broadcast';
 
             if (isScheduled) {
                 endpoint = '/api/notify/schedule';
-                formData.append('channel', channel);
             }
 
             try {
                 const response = await fetch(endpoint, {
                     method: 'POST',
-                    body: formData // ផ្ញើដោយមិនបាច់កំណត់ Content-Type header (Browser រៀបចំអូតូ)
+                    body: formData
                 });
 
                 const result = await response.json();

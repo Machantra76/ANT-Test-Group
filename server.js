@@ -7,8 +7,8 @@ const TelegramBot = require('node-telegram-bot-api');
 const line = require('@line/bot-sdk');
 const { Client, LocalAuth, MessageMedia } = require('whatsapp-web.js');
 const qrcode = require('qrcode-terminal');
-const cron = require('node-cron');
 const { Pool } = require('pg');
+const fs = require('fs');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -20,11 +20,13 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 const upload = multer({ storage: multer.memoryStorage() });
 
+// ១. ការតភ្ជាប់ Neon Database
 const pool = new Pool({
     connectionString: process.env.DATABASE_URL,
     ssl: { rejectUnauthorized: false }
 });
 
+// ២. បង្កើតតារាងក្នុង Database បើមិនទាន់មាន
 async function initDatabase() {
     try {
         await pool.query(`
@@ -34,29 +36,30 @@ async function initDatabase() {
                 recipient TEXT,
                 message TEXT,
                 status VARCHAR(50),
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
+                created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+            );
         `);
         await pool.query(`
             CREATE TABLE IF NOT EXISTS scheduled_messages (
                 id SERIAL PRIMARY KEY,
-                channel VARCHAR(50),
+                channel VARCHAR(50) NOT NULL,
                 recipient TEXT,
                 message TEXT,
                 image_data BYTEA,
                 image_mimetype VARCHAR(100),
-                schedule_time TIMESTAMP,
+                schedule_time TIMESTAMP WITH TIME ZONE NOT NULL,
                 status VARCHAR(50) DEFAULT 'Pending',
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
+                created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+            );
         `);
-        console.log('✅ បានតភ្ជាប់ និងបង្កើត Tables ក្នុង Neon DB ជោគជ័យ!');
+        console.log('✅ [Database] បានតភ្ជាប់ និងបង្កើត Tables រួចរាល់!');
     } catch (err) {
-        console.error('❌ កំហុស Database:', err.message);
+        console.error('❌ [Database Error]:', err.message);
     }
 }
 initDatabase();
 
+// ៣. រក្សាទុក Logs
 async function saveLog(channel, recipient, message, status) {
     try {
         await pool.query(
@@ -64,162 +67,159 @@ async function saveLog(channel, recipient, message, status) {
             [channel, recipient, message, status]
         );
     } catch (err) {
-        console.error('❌ Error saving log:', err.message);
+        console.error('❌ [Log Save Error]:', err.message);
     }
 }
 
-// Telegram Setup
+// ៤. Telegram Bot Setup
 const telegramToken = process.env.TELEGRAM_BOT_TOKEN;
 let telegramBot = null;
-if (telegramToken && telegramToken !== 'YOUR_TELEGRAM_BOT_TOKEN_HERE') {
+if (telegramToken && !telegramToken.includes('YOUR_TELEGRAM')) {
     telegramBot = new TelegramBot(telegramToken, { polling: true });
-    console.log('✅ Telegram Bot បានតភ្ជាប់!');
+    console.log('✅ [Telegram Bot] តភ្ជាប់ជោគជ័យ!');
 }
 
-// WhatsApp Setup
+// ៥. WhatsApp Setup
 const whatsappClient = new Client({
     authStrategy: new LocalAuth(),
     puppeteer: {
         headless: true,
-        executablePath: process.env.CHROME_PATH || undefined,
         args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu']
     }
 });
 whatsappClient.on('qr', (qr) => qrcode.generate(qr, { small: true }));
-whatsappClient.on('ready', () => console.log('✅ WhatsApp Client រួចរាល់!'));
-whatsappClient.initialize().catch(err => console.error('WhatsApp Error:', err.message));
+whatsappClient.on('ready', () => console.log('✅ [WhatsApp Client] រួចរាល់!'));
+whatsappClient.initialize().catch(err => console.error('❌ [WhatsApp Error]:', err.message));
 
-// LINE Setup
-const lineClient = new line.Client({
+// ៦. LINE Bot Setup
+const lineConfig = {
     channelAccessToken: process.env.LINE_CHANNEL_ACCESS_TOKEN || '',
     channelSecret: process.env.LINE_CHANNEL_SECRET || ''
-});
+};
+const lineClient = (lineConfig.channelAccessToken && !lineConfig.channelAccessToken.includes('YOUR_LINE'))
+    ? new line.Client(lineConfig)
+    : null;
 
-// ฟังก์ชันสำหรับส่งข้อความจริงไปยังแต่ละช่องทาง
-async function executeNotification(channel, recipient, message, file) {
+// ៧. Core Function សម្រាប់បញ្ជូនសារតាម Platform
+async function sendNotification(channel, recipient, message, fileBuffer, fileMime) {
     let tempFilePath = null;
-    if (file && file.buffer) {
-        const fs = require('fs');
-        const ext = file.mimetype ? file.mimetype.split('/')[1] : 'jpg';
+    if (fileBuffer) {
+        const ext = fileMime ? fileMime.split('/')[1] : 'jpg';
         tempFilePath = path.join(__dirname, `temp_${Date.now()}.${ext}`);
-        fs.writeFileSync(tempFilePath, file.buffer);
+        fs.writeFileSync(tempFilePath, fileBuffer);
     }
 
-    if (channel === 'telegram' || channel === 'broadcast') {
-        const targetChatId = recipient || process.env.TELEGRAM_GROUP_CHAT_ID;
-        if (targetChatId && telegramBot) {
-            if (tempFilePath) {
-                await telegramBot.sendPhoto(targetChatId, tempFilePath, { caption: message || '', parse_mode: 'HTML' });
-            } else {
-                await telegramBot.sendMessage(targetChatId, message || '', { parse_mode: 'HTML' });
-            }
-            await saveLog('Telegram', targetChatId, message || '[Photo]', 'Success');
-        }
-    }
-
-    if (channel === 'whatsapp' || (channel === 'broadcast' && recipient)) {
-        const cleanNumber = (recipient || '').replace(/[^0-9]/g, '');
-        if (cleanNumber) {
-            const formattedNumber = `${cleanNumber}@c.us`;
-            if (tempFilePath) {
-                const media = new MessageMedia(file.mimetype, file.buffer.toString('base64'), file.originalname);
-                await whatsappClient.sendMessage(formattedNumber, media, { caption: message || '' });
-            } else {
-                await whatsappClient.sendMessage(formattedNumber, message);
-            }
-            await saveLog('WhatsApp', recipient, message || '[Photo]', 'Success');
-        }
-    }
-
-    if (channel === 'line' || channel === 'broadcast') {
-        if (recipient && lineClient) {
-            const messages = [];
-            if (message) messages.push({ type: 'text', text: message });
-            if (messages.length > 0) {
-                await lineClient.pushMessage(recipient, messages);
-                await saveLog('LINE', recipient, message || '[Photo]', 'Success');
-            }
-        }
-    }
-
-    if (tempFilePath && require('fs').existsSync(tempFilePath)) {
-        require('fs').unlinkSync(tempFilePath);
-    }
-}
-
-// ⚙️ Logic កណ្ដាលសម្រាប់ដំណើរការពិនិត្យ និងផ្ញើសារតាមកាលវិភាគ
-async function processScheduledMessages() {
     try {
-        const result = await pool.query(
-            `SELECT * FROM scheduled_messages WHERE schedule_time <= CURRENT_TIMESTAMP AND status = 'Pending'`
-        );
-
-        if (result.rows.length === 0) return { processed: 0 };
-        console.log(`⏰ រកឃើញសារស្វ័យប្រវត្តិចំនួន ${result.rows.length} ត្រូវផ្ញើ!`);
-
-        for (const item of result.rows) {
-            try {
-                let fileObj = null;
-                if (item.image_data) {
-                    fileObj = { buffer: item.image_data, mimetype: item.image_mimetype, originalname: 'image.jpg' };
+        // --- Telegram ---
+        if (channel === 'telegram' || channel === 'broadcast') {
+            const targetId = recipient || process.env.TELEGRAM_GROUP_CHAT_ID;
+            if (targetId && telegramBot) {
+                if (tempFilePath) {
+                    await telegramBot.sendPhoto(targetId, tempFilePath, { caption: message || '', parse_mode: 'HTML' });
+                } else {
+                    await telegramBot.sendMessage(targetId, message || '', { parse_mode: 'HTML' });
                 }
-                await executeNotification(item.channel, item.recipient, item.message, fileObj);
-                await pool.query("UPDATE scheduled_messages SET status = 'Sent' WHERE id = $1", [item.id]);
-                console.log(`✅ បានផ្ញើសារ Schedule ID: ${item.id} ជោគជ័យ!`);
-            } catch (err) {
-                console.error(`❌ បរាជ័យ Schedule ID ${item.id}:`, err.message);
-                await pool.query("UPDATE scheduled_messages SET status = $1 WHERE id = $2", [`Failed: ${err.message}`, item.id]);
+                await saveLog('Telegram', targetId, message || '[Photo]', 'Success');
             }
         }
-        return { processed: result.rows.length };
-    } catch (err) {
-        console.error('❌ Process Scheduled Error:', err.message);
-        throw err;
+
+        // --- WhatsApp ---
+        if (channel === 'whatsapp' || (channel === 'broadcast' && recipient)) {
+            const cleanNumber = (recipient || '').replace(/[^0-9]/g, '');
+            if (cleanNumber) {
+                const formattedNumber = `${cleanNumber}@c.us`;
+                if (fileBuffer) {
+                    const media = new MessageMedia(fileMime, fileBuffer.toString('base64'), 'image.jpg');
+                    await whatsappClient.sendMessage(formattedNumber, media, { caption: message || '' });
+                } else {
+                    await whatsappClient.sendMessage(formattedNumber, message);
+                }
+                await saveLog('WhatsApp', recipient, message || '[Photo]', 'Success');
+            }
+        }
+
+        // --- LINE ---
+        if (channel === 'line' || channel === 'broadcast') {
+            const targetLineId = recipient || process.env.LINE_USER_ID;
+            if (targetLineId && lineClient) {
+                const messages = [];
+                if (message) messages.push({ type: 'text', text: message });
+                if (messages.length > 0) {
+                    await lineClient.pushMessage(targetLineId, messages);
+                    await saveLog('LINE', targetLineId, message || '[Photo]', 'Success');
+                }
+            }
+        }
+    } finally {
+        if (tempFilePath && fs.existsSync(tempFilePath)) {
+            fs.unlinkSync(tempFilePath);
+        }
     }
 }
 
-// 🌐 Endpoint ថ្មី៖ សម្រាប់ឱ្យ Cron-job.org មកគោះហៅដើម្បីការពារ Render Sleep និងបញ្ជូនសារស្វ័យប្រវត្តិ
+// ៨. Logic ឆែកសាររង់ចាំ និងធ្វើការផ្ញើ
+async function processPendingSchedules() {
+    // ឆែកមើលសារណាដែល status = 'Pending' និង schedule_time ដល់ម៉ោង ឬហួសម៉ោងបច្ចុប្បន្ន
+    const result = await pool.query(
+        `SELECT * FROM scheduled_messages WHERE status = 'Pending' AND schedule_time <= NOW()`
+    );
+
+    const pendingTasks = result.rows;
+    if (pendingTasks.length === 0) {
+        return { count: 0 };
+    }
+
+    console.log(`⏰ [Worker] រកឃើញសារស្វ័យប្រវត្តិចំនួន ${pendingTasks.length} ត្រូវផ្ញើ!`);
+
+    let successCount = 0;
+    for (const item of pendingTasks) {
+        try {
+            await sendNotification(item.channel, item.recipient, item.message, item.image_data, item.image_mimetype);
+            await pool.query("UPDATE scheduled_messages SET status = 'Sent' WHERE id = $1", [item.id]);
+            console.log(`✅ [Worker] ផ្ញើសារ Schedule ID ${item.id} ជោគជ័យ!`);
+            successCount++;
+        } catch (err) {
+            console.error(`❌ [Worker Error] Schedule ID ${item.id}:`, err.message);
+            await pool.query("UPDATE scheduled_messages SET status = $1 WHERE id = $2", [`Failed: ${err.message}`, item.id]);
+        }
+    }
+    return { count: pendingTasks.length, success: successCount };
+}
+
+// ៩. API Endpoint សម្រាប់ Cron Worker (Cron-job.org / Browser Call)
 app.get('/api/run-cron', async (req, res) => {
     try {
-        await processScheduledMessages();
-        res.json({ success: true, message: 'Cron executed successfully via external trigger.' });
+        const result = await processPendingSchedules();
+        res.json({
+            success: true,
+            message: `Cron executed. Processed: ${result.count}`,
+            timestamp: new Date()
+        });
     } catch (err) {
         res.status(500).json({ success: false, error: err.message });
     }
 });
 
-// ⏰ setInterval រៀងរាល់ ១ នាទីម្តង
-setInterval(async () => {
-    try {
-        await processScheduledMessages();
-    } catch (err) {
-        console.error('❌ Interval Worker Error:', err.message);
-    }
-}, 60000);
-
-// ⏰ CRON WORKER រៀងរាល់ ១ នាទីម្តង
-cron.schedule('* * * * *', async () => {
-    try {
-        await processScheduledMessages();
-    } catch (err) {
-        console.error('❌ Cron Error:', err.message);
-    }
-}, { scheduled: true, timezone: "UTC" });
-
-// API ផ្ញើសារភ្លាមៗ
+// ១០. API ផ្ញើសារភ្លាមៗ (Instant Send)
 app.post('/api/notify/send', upload.single('image'), async (req, res) => {
     const { channel, message, phoneNumber, userId } = req.body;
     const recipient = phoneNumber || userId || process.env.TELEGRAM_GROUP_CHAT_ID;
 
     try {
-        await executeNotification(channel, recipient, message, req.file);
+        await sendNotification(
+            channel,
+            recipient,
+            message,
+            req.file ? req.file.buffer : null,
+            req.file ? req.file.mimetype : null
+        );
         res.json({ success: true, message: 'បានបញ្ជូនសារដោយជោគជ័យ!' });
     } catch (err) {
         res.status(500).json({ success: false, error: err.message });
     }
 });
 
-// API រក្សាទុកកាលវិភាគ (Schedule) - បម្លែងម៉ោងឱ្យត្រូវជា UTC មុនរក្សាទុក
+// ១១. API កំណត់ពេលផ្ញើសារ (Schedule)
 app.post('/api/notify/schedule', upload.single('image'), async (req, res) => {
     const { channel, message, scheduleTime, phoneNumber, userId } = req.body;
     const recipient = phoneNumber || userId || process.env.TELEGRAM_GROUP_CHAT_ID;
@@ -229,19 +229,30 @@ app.post('/api/notify/schedule', upload.single('image'), async (req, res) => {
     }
 
     try {
-        const localDate = new Date(scheduleTime);
-        const utcDate = new Date(localDate.getTime() - (localDate.getTimezoneOffset() * 60000));
+        // រក្សាទុក Timezone ត្រឹមត្រូវទៅក្នុង Database
+        const targetDate = new Date(scheduleTime);
 
         await pool.query(
-            'INSERT INTO scheduled_messages (channel, recipient, message, image_data, image_mimetype, schedule_time) VALUES ($1, $2, $3, $4, $5, $6)',
-            [channel, recipient, message || '', req.file ? req.file.buffer : null, req.file ? req.file.mimetype : null, utcDate]
+            `INSERT INTO scheduled_messages 
+             (channel, recipient, message, image_data, image_mimetype, schedule_time, status) 
+             VALUES ($1, $2, $3, $4, $5, $6, 'Pending')`,
+            [
+                channel,
+                recipient,
+                message || '',
+                req.file ? req.file.buffer : null,
+                req.file ? req.file.mimetype : null,
+                targetDate.toISOString()
+            ]
         );
-        res.json({ success: true, message: `បានកំណត់ពេលផ្ញើសារសម្រាប់ថ្ងៃទី ${scheduleTime} រួចរាល់!` });
+
+        res.json({ success: true, message: `បានកំណត់ពេលផ្ញើសារសម្រាប់៖ ${scheduleTime} រួចរាល់!` });
     } catch (err) {
         res.status(500).json({ success: false, error: err.message });
     }
 });
 
+// ១២. API ទាញយក Logs
 app.get('/api/logs', async (req, res) => {
     try {
         const result = await pool.query('SELECT * FROM notification_logs ORDER BY created_at DESC LIMIT 50');
@@ -253,4 +264,4 @@ app.get('/api/logs', async (req, res) => {
 
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 
-app.listen(PORT, () => console.log(`🚀 Server រត់លើ http://localhost:${PORT}`));
+app.listen(PORT, () => console.log(`🚀 Server កំពុងរត់លើ http://localhost:${PORT}`));

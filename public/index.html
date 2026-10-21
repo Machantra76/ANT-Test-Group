@@ -112,7 +112,7 @@
             if (lineId) formData.append('userId', lineId);
             if (imageFile) formData.append('image', imageFile);
 
-            let endpoint = '/api/notify/send'; // ប្រើប្រាស់ Endpoint តែមួយសម្រាប់គ្រប់គ្រងទាំងភ្លាមៗ និងតាមកាលវិភាគ
+            let endpoint = '/api/notify/send';
 
             if (isScheduled) {
                 formData.append('scheduleTime', scheduleTime);

@@ -190,6 +190,7 @@ app.post('/api/notify/send', upload.single('image'), async (req, res) => {
 });
 
 // API រក្សាទុកកាលវិភាគ (Schedule)
+// API រក្សាទុកកាលវិភាគ (Schedule) - បានកែសម្រួលការគណនាម៉ោង UTC
 app.post('/api/notify/schedule', upload.single('image'), async (req, res) => {
     const { channel, message, scheduleTime, phoneNumber, userId } = req.body;
     const recipient = phoneNumber || userId || process.env.TELEGRAM_GROUP_CHAT_ID;
@@ -199,17 +200,19 @@ app.post('/api/notify/schedule', upload.single('image'), async (req, res) => {
     }
 
     try {
-        const scheduleDate = new Date(scheduleTime);
+        // បំប្លែងម៉ោង datetime-local ឱ្យទៅជា Date object ស្របតាមម៉ោង Local របស់អ្នកប្រើប្រាស់
+        // រួចបម្លែងវាចេញជា UTC Date ដើម្បីយកទៅ သိမ်းក្នុង Database
+        const localDate = new Date(scheduleTime);
+        
         await pool.query(
             'INSERT INTO scheduled_messages (channel, recipient, message, image_data, image_mimetype, schedule_time) VALUES ($1, $2, $3, $4, $5, $6)',
-            [channel, recipient, message || '', req.file ? req.file.buffer : null, req.file ? req.file.mimetype : null, scheduleDate]
+            [channel, recipient, message || '', req.file ? req.file.buffer : null, req.file ? req.file.mimetype : null, localDate]
         );
         res.json({ success: true, message: `បានកំណត់ពេលផ្ញើសារសម្រាប់ថ្ងៃទី ${scheduleTime} រួចរាល់!` });
     } catch (err) {
         res.status(500).json({ success: false, error: err.message });
     }
 });
-
 app.get('/api/logs', async (req, res) => {
     try {
         const result = await pool.query('SELECT * FROM notification_logs ORDER BY created_at DESC LIMIT 50');

@@ -9,6 +9,7 @@ const { Client, LocalAuth, MessageMedia } = require('whatsapp-web.js');
 const qrcode = require('qrcode-terminal');
 const { Pool } = require('pg');
 const fs = require('fs');
+const sharp = require('sharp'); // នាំចូល sharp សម្រាប់កែច្នៃសរសេរអត្ថបទលើរូបភាព
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -100,13 +101,55 @@ const lineClient = (lineConfig.channelAccessToken && !lineConfig.channelAccessTo
     ? new line.Client(lineConfig)
     : null;
 
-// ៧. Core Function សម្រាប់បញ្ជូនសារតាម Platform
+// 🆕 Function សម្រាប់សរសេរអត្ថបទ/Date ដាក់លើរូបភាពជានិច្ច
+async function addTextToImage(imageBuffer, text) {
+    if (!text) return imageBuffer;
+    try {
+        const metadata = await sharp(imageBuffer).metadata();
+        const width = metadata.width || 800;
+        const height = metadata.height || 600;
+
+        const svgText = `
+            <svg width="${width}" height="${height}">
+                <style>
+                    .text {
+                        fill: #ffffff;
+                        font-size: ${Math.max(24, Math.floor(width / 30))}px;
+                        font-weight: bold;
+                        font-family: Arial, sans-serif;
+                    }
+                    .bg {
+                        fill: rgba(0, 0, 0, 0.65);
+                    }
+                </style>
+                <rect x="0" y="${height - 100}" width="${width}" height="100" class="bg" />
+                <text x="30" y="${height - 40}" class="text">${text}</text>
+            </svg>
+        `;
+
+        const modifiedBuffer = await sharp(imageBuffer)
+            .composite([{ input: Buffer.from(svgText), top: 0, left: 0 }])
+            .toBuffer();
+
+        return modifiedBuffer;
+    } catch (err) {
+        console.error('❌ [Image Processing Error]:', err.message);
+        return imageBuffer;
+    }
+}
+
+// ៧. Core Function សម្រាប់បញ្ជូនសារតាម Platform (พร้อมระบบبិតអត្ថបទលើរូបភាព)
 async function sendNotification(channel, recipient, message, fileBuffer, fileMime) {
+    let processedBuffer = fileBuffer;
+    if (fileBuffer && message) {
+        processedBuffer = await addTextToImage(fileBuffer, message);
+    }
+
     let tempFilePath = null;
-    if (fileBuffer) {
+    if (processedBuffer) {
         const ext = fileMime ? fileMime.split('/')[1] : 'jpg';
         tempFilePath = path.join(__dirname, `temp_${Date.now()}.${ext}`);
-        fs.writeFileSync(tempFilePath, fileBuffer);
+        fs.writeFileSync(tempFilePath, processedBuffer);
     }
 
     try {
@@ -128,8 +171,8 @@ async function sendNotification(channel, recipient, message, fileBuffer, fileMim
             const cleanNumber = (recipient || '').replace(/[^0-9]/g, '');
             if (cleanNumber) {
                 const formattedNumber = `${cleanNumber}@c.us`;
-                if (fileBuffer) {
-                    const media = new MessageMedia(fileMime, fileBuffer.toString('base64'), 'image.jpg');
+                if (processedBuffer) {
+                    const media = new MessageMedia(fileMime || 'image/jpeg', processedBuffer.toString('base64'), 'image.jpg');
                     await whatsappClient.sendMessage(formattedNumber, media, { caption: message || '' });
                 } else {
                     await whatsappClient.sendMessage(formattedNumber, message);

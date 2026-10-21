@@ -82,10 +82,12 @@ if (telegramToken && !telegramToken.includes('YOUR_TELEGRAM')) {
 
 // ៥. WhatsApp Setup (កែសម្រួលប្រើ puppeteer.executablePath ឱ្យស្គាល់ Chrome លើ Render ស្វ័យប្រវត្តិ)
 // ៥. WhatsApp Setup (កំណត់កូដបែប Safe Mode)
+// ៥. WhatsApp Setup (កំណត់ Path ចំ Render Linux Environment ផ្ទាល់)
 const whatsappClient = new Client({
     authStrategy: new LocalAuth(),
     puppeteer: {
         headless: true,
+        executablePath: '/opt/render/.cache/puppeteer/chrome/linux-146.0.7680.31/chrome-linux64/chrome',
         args: [
             '--no-sandbox', 
             '--disable-setuid-sandbox', 

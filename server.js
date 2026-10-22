@@ -19,6 +19,7 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
 
+// 🆕 កែសម្រួល multer ឱ្យទទួលរូបភាពច្រើន (រហូតដល់ ១០ រូប)
 const upload = multer({ storage: multer.memoryStorage() });
 
 // ១. ការតភ្ជាប់ Neon Database
@@ -27,7 +28,7 @@ const pool = new Pool({
     ssl: { rejectUnauthorized: false }
 });
 
-// ២. បង្កើតតារាងក្នុង Database បើមិនទាន់មាន
+// ២. បង្កើតតារាងក្នុង Database បើមិនទាន់មាន (គាំទ្ររូបភាពច្រើនជា JSON Array នៃ ByteA ឬ Text)
 async function initDatabase() {
     try {
         await pool.query(`
@@ -46,8 +47,7 @@ async function initDatabase() {
                 channel VARCHAR(50) NOT NULL,
                 recipient TEXT,
                 message TEXT,
-                image_data BYTEA,
-                image_mimetype VARCHAR(100),
+                images_data TEXT, -- រក្សាទុកជា JSON string នៃ buffer និង mimetype រូបភាពច្រើន
                 schedule_time TIMESTAMP WITH TIME ZONE NOT NULL,
                 status VARCHAR(50) DEFAULT 'Pending',
                 created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
@@ -101,20 +101,29 @@ const lineClient = (lineConfig.channelAccessToken && !lineConfig.channelAccessTo
     ? new line.Client(lineConfig)
     : null;
 
-// ៧. Core Function សម្រាប់បញ្ជូនសារតាម Platform (គាំទ្រការផ្ញើចូល Chat ID ច្រើនព្រមគ្នា)
-async function sendNotification(channel, recipient, message, fileBuffer, fileMime) {
-    let tempFilePath = null;
-    if (fileBuffer) {
-        const ext = fileMime ? fileMime.split('/')[1] : 'jpg';
-        tempFilePath = path.join(__dirname, `temp_${Date.now()}.${ext}`);
-        fs.writeFileSync(tempFilePath, fileBuffer);
-    }
-
+// ៧. Core Function សម្រាប់បញ្ជូនសារ និងរូបភាពច្រើនតាម Platform
+async function sendNotification(channel, recipient, message, imagesArray) {
+    let tempFilePaths = [];
+    
     try {
-        // --- Telegram (รองรับหลาย Group โดยคั่นด้วยเครื่องหมายจุลภาค ,) ---
+        // បង្កើត temporary files សម្រាប់រូបភាពនីមួយៗ
+        if (imagesArray && imagesArray.length > 0) {
+            for (let i = 0; i < imagesArray.length; i++) {
+                const imgObj = imagesArray[i];
+                // imgObj អាចជា object ដែលមាន buffer (from db) ឬ multer file object
+                const buffer = imgObj.buffer?.type === 'Buffer' ? Buffer.from(imgObj.buffer.data) : (imgObj.buffer || imgObj);
+                const mimetype = imgObj.mimetype || 'image/jpeg';
+                const ext = mimetype.split('/')[1] || 'jpg';
+                
+                const tempFilePath = path.join(__dirname, `temp_${Date.now()}_${i}.${ext}`);
+                fs.writeFileSync(tempFilePath, buffer);
+                tempFilePaths.push({ path: tempFilePath, mimetype });
+            }
+        }
+
+        // --- Telegram (គាំទ្រការផ្ញើ Chat ID ច្រើន និងរូបភាពច្រើន) ---
         if (channel === 'telegram' || channel === 'broadcast') {
             const rawTargets = recipient || process.env.TELEGRAM_GROUP_CHAT_ID || '';
-            // បំបែក Chat ID ជា Array តាមរយៈសញ្ញាក្បៀស (,) ឧទាហរណ៍: -100xxx,-100yyy
             const targetIds = rawTargets.split(',').map(id => id.trim()).filter(id => id.length > 0);
 
             if (telegramBot && targetIds.length > 0) {
@@ -124,14 +133,16 @@ async function sendNotification(channel, recipient, message, fileBuffer, fileMim
                         if (message) {
                             await telegramBot.sendMessage(targetId, message, { parse_mode: 'HTML' });
                         }
-                        // ២. ផ្ញើរូបភាព (Image) តាមក្រោយ
-                        if (tempFilePath) {
-                            await telegramBot.sendPhoto(targetId, tempFilePath);
+                        // ២. ផ្ញើរូបភាពទាំងអស់តាមក្រោយ (អាចផ្ញើជា MediaGroup បើមានច្រើន ឬ sendPhoto ម្ដងមួយ)
+                        if (tempFilePaths.length > 0) {
+                            for (const fileObj of tempFilePaths) {
+                                await telegramBot.sendPhoto(targetId, fileObj.path);
+                            }
                         }
-                        await saveLog('Telegram', targetId, message || '[Photo]', 'Success');
+                        await saveLog('Telegram', targetId, message || '[Photos]', 'Success');
                     } catch (singleErr) {
                         console.error(`❌ [Telegram Error for ID ${targetId}]:`, singleErr.message);
-                        await saveLog('Telegram', targetId, message || '[Photo]', `Failed: ${singleErr.message}`);
+                        await saveLog('Telegram', targetId, message || '[Photos]', `Failed: ${singleErr.message}`);
                     }
                 }
             }
@@ -146,12 +157,13 @@ async function sendNotification(channel, recipient, message, fileBuffer, fileMim
                 if (message) {
                     await whatsappClient.sendMessage(formattedNumber, message);
                 }
-                // ២. ផ្ញើរូបភាព (Image) តាមក្រោយ
-                if (fileBuffer) {
-                    const media = new MessageMedia(fileMime, fileBuffer.toString('base64'), 'image.jpg');
+                // ២. ផ្ញើរូបភាពទាំងអស់តាមក្រោយ
+                for (const fileObj of tempFilePaths) {
+                    const fileBuffer = fs.readFileSync(fileObj.path);
+                    const media = new MessageMedia(fileObj.mimetype, fileBuffer.toString('base64'), 'image.jpg');
                     await whatsappClient.sendMessage(formattedNumber, media);
                 }
-                await saveLog('WhatsApp', recipient, message || '[Photo]', 'Success');
+                await saveLog('WhatsApp', recipient, message || '[Photos]', 'Success');
             }
         }
 
@@ -160,18 +172,19 @@ async function sendNotification(channel, recipient, message, fileBuffer, fileMim
             const targetLineId = recipient || process.env.LINE_USER_ID;
             if (targetLineId && lineClient) {
                 const messages = [];
-                // ១. ផ្ញើអត្ថបទទៅមុន
                 if (message) messages.push({ type: 'text', text: message });
-                // ២. ផ្ញើរូបភាពតាមក្រោយ
                 if (messages.length > 0) {
                     await lineClient.pushMessage(targetLineId, messages);
-                    await saveLog('LINE', targetLineId, message || '[Photo]', 'Success');
+                    await saveLog('LINE', targetLineId, message || '[Photos]', 'Success');
                 }
             }
         }
     } finally {
-        if (tempFilePath && fs.existsSync(tempFilePath)) {
-            fs.unlinkSync(tempFilePath);
+        // លុប temporary files ចោលវិញក្រោយពេលផ្ញើចប់
+        for (const fileObj of tempFilePaths) {
+            if (fs.existsSync(fileObj.path)) {
+                fs.unlinkSync(fileObj.path);
+            }
         }
     }
 }
@@ -192,7 +205,11 @@ async function processPendingSchedules() {
     let successCount = 0;
     for (const item of pendingTasks) {
         try {
-            await sendNotification(item.channel, item.recipient, item.message, item.image_data, item.image_mimetype);
+            let imagesArray = [];
+            if (item.images_data) {
+                imagesArray = JSON.parse(item.images_data);
+            }
+            await sendNotification(item.channel, item.recipient, item.message, imagesArray);
             await pool.query("UPDATE scheduled_messages SET status = 'Sent' WHERE id = $1", [item.id]);
             console.log(`✅ [Worker] ផ្ញើសារ Schedule ID ${item.id} ជោគជ័យ!`);
             successCount++;
@@ -218,27 +235,26 @@ app.get('/api/run-cron', async (req, res) => {
     }
 });
 
-// ១០. API ផ្ញើសារភ្លាមៗ
-app.post('/api/notify/send', upload.single('image'), async (req, res) => {
+// ១០. API ផ្ញើសារភ្លាមៗ (គាំទ្ររូបភាពច្រើន req.files)
+app.post('/api/notify/send', upload.array('images', 10), async (req, res) => {
     const { channel, message, phoneNumber, userId } = req.body;
     const recipient = phoneNumber || userId || process.env.TELEGRAM_GROUP_CHAT_ID;
 
     try {
-        await sendNotification(
-            channel,
-            recipient,
-            message,
-            req.file ? req.file.buffer : null,
-            req.file ? req.file.mimetype : null
-        );
-        res.json({ success: true, message: 'បានបញ្ជូនសារដោយជោគជ័យ!' });
+        const imagesArray = req.files ? req.files.map(file => ({
+            buffer: file.buffer,
+            mimetype: file.mimetype
+        })) : [];
+
+        await sendNotification(channel, recipient, message, imagesArray);
+        res.json({ success: true, message: 'បានបញ្ជូនសារនិងរូបភាពដោយជោគជ័យ!' });
     } catch (err) {
         res.status(500).json({ success: false, error: err.message });
     }
 });
 
-// ១១. API បង្កើតកាលវិភាគផ្ញើសារ (Create Schedule) - កែសម្រួល Timezone ឱ្យត្រូវម៉ោងកម្ពុជា (+07:00)
-app.post('/api/notify/schedule', upload.single('image'), async (req, res) => {
+// ១១. API បង្កើតកាលវិភាគផ្ញើសារ (Create Schedule) - គាំទ្ររូបភាពច្រើន
+app.post('/api/notify/schedule', upload.array('images', 10), async (req, res) => {
     const { channel, message, scheduleTime, phoneNumber, userId } = req.body;
     const recipient = phoneNumber || userId || process.env.TELEGRAM_GROUP_CHAT_ID;
 
@@ -248,17 +264,20 @@ app.post('/api/notify/schedule', upload.single('image'), async (req, res) => {
 
     try {
         const targetDate = new Date(scheduleTime + '+07:00');
+        const imagesArray = req.files ? req.files.map(file => ({
+            buffer: file.buffer,
+            mimetype: file.mimetype
+        })) : [];
 
         await pool.query(
             `INSERT INTO scheduled_messages 
-             (channel, recipient, message, image_data, image_mimetype, schedule_time, status) 
-             VALUES ($1, $2, $3, $4, $5, $6, 'Pending')`,
+             (channel, recipient, message, images_data, schedule_time, status) 
+             VALUES ($1, $2, $3, $4, $5, 'Pending')`,
             [
                 channel,
                 recipient,
                 message || '',
-                req.file ? req.file.buffer : null,
-                req.file ? req.file.mimetype : null,
+                JSON.stringify(imagesArray),
                 targetDate.toISOString()
             ]
         );
@@ -270,10 +289,10 @@ app.post('/api/notify/schedule', upload.single('image'), async (req, res) => {
 });
 
 // -------------------------------------------------------------
-// 🆕 មុខងារបន្ថែម៖ មើលបញ្ជី, កែប្រែ, និងលុប Schedule
+// មុខងារបន្ថែម៖ មើលបញ្ជី, កែប្រែ, និងលុប Schedule
 // -------------------------------------------------------------
 
-// ទាញយកបញ្ជីកាលវិភាគទាំងអស់ (Get All Schedules)
+// ទាញយកបញ្ជីកាលវិភាគទាំងអស់
 app.get('/api/schedules', async (req, res) => {
     try {
         const result = await pool.query(
@@ -285,8 +304,8 @@ app.get('/api/schedules', async (req, res) => {
     }
 });
 
-// កែប្រែព័ត៌មានកាលវិភាគ (Update Schedule) - កែសម្រួល Timezone ឱ្យត្រូវម៉ោងកម្ពុជា (+07:00)
-app.put('/api/schedules/:id', upload.single('image'), async (req, res) => {
+// កែប្រែព័ត៌មានកាលវិភាគ (Update Schedule) - គាំទ្ររូបភាពច្រើន
+app.put('/api/schedules/:id', upload.array('images', 10), async (req, res) => {
     const { id } = req.params;
     const { channel, message, scheduleTime, phoneNumber, userId } = req.body;
     const recipient = phoneNumber || userId || process.env.TELEGRAM_GROUP_CHAT_ID;
@@ -294,17 +313,21 @@ app.put('/api/schedules/:id', upload.single('image'), async (req, res) => {
     try {
         const targetDate = new Date(scheduleTime + '+07:00');
 
-        if (req.file) {
+        if (req.files && req.files.length > 0) {
+            const imagesArray = req.files.map(file => ({
+                buffer: file.buffer,
+                mimetype: file.mimetype
+            }));
             await pool.query(
                 `UPDATE scheduled_messages 
-                 SET channel = $1, recipient = $2, message = $3, image_data = $4, image_mimetype = $5, schedule_time = $6, status = 'Pending'
-                 WHERE id = $7`,
-                [channel, recipient, message, req.file.buffer, req.file.mimetype, targetDate.toISOString(), id]
+                 SET channel = $1, recipient = $2, message = $3, images_data = $4, schedule_time = $5, status = 'Pending'
+                 WHERE id = $6`,
+                [channel, recipient, message, JSON.stringify(imagesArray), targetDate.toISOString(), id]
             );
         } else {
             await pool.query(
                 `UPDATE scheduled_messages 
-                 SET channel = $1, recipient = $2, message = $3, schedule_time = $4, status 'Pending'
+                 SET channel = $1, recipient = $2, message = $3, schedule_time = $4, status = 'Pending'
                  WHERE id = $5`,
                 [channel, recipient, message, targetDate.toISOString(), id]
             );

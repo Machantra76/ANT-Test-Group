@@ -337,12 +337,16 @@ app.post('/api/groups', async (req, res) => {
 // មុខងារបន្ថែម៖ មើលបញ្ជី, កែប្រែ, និងលុប Schedule
 // -------------------------------------------------------------
 
-// ទាញយកបញ្ជីកាលវិភាគទាំងអស់
+// ទាញយកបញ្ជីកាលវិភាគទាំងអស់ ព្រមទាំងឈ្មោះគ្រុប (Join ជាមួយ groups table)
 app.get('/api/schedules', async (req, res) => {
     try {
-        const result = await pool.query(
-            'SELECT id, channel, recipient, message, schedule_time, status, created_at FROM scheduled_messages ORDER BY schedule_time DESC'
-        );
+        const result = await pool.query(`
+            SELECT s.id, s.channel, s.recipient, s.message, s.schedule_time, s.status, s.created_at, 
+                   g.name as group_name 
+            FROM scheduled_messages s
+            LEFT JOIN groups g ON s.recipient = g.group_id
+            ORDER BY s.schedule_time DESC
+        `);
         res.json({ success: true, schedules: result.rows });
     } catch (err) {
         res.status(500).json({ success: false, error: err.message });

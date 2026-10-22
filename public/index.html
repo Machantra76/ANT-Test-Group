@@ -148,6 +148,15 @@
             </select>
         </div>
 
+        <!-- 🆕 បន្ថែម Dropdown សម្រាប់ជ្រើសរើស Group នីមួយៗ -->
+        <div class="form-group">
+            <label for="groupSelect">ជ្រើសរើសគ្រុប (Select Group):</label>
+            <select id="groupSelect" name="groupSelect" onchange="onGroupSelected()">
+                <option value="">-- ជ្រើសរើសគ្រុប ឬបញ្ចូលដោយដៃខាងក្រោម --</option>
+                <!-- ទិន្នន័យគ្រុបនឹងត្រូវទាញមកដាក់ទីនេះដោយស្វ័យប្រវត្តិ -->
+            </select>
+        </div>
+
         <div class="form-group">
             <label for="phoneNumber">លេខទូរស័ព្ទ / Group / Chat ID (ជម្រើសបន្ថែម):</label>
             <input type="text" id="phoneNumber" name="phoneNumber" placeholder="ឧទាហរណ៍៖ 85512345678 ឬ Chat ID">
@@ -158,7 +167,6 @@
             <textarea id="message" name="message" rows="4" placeholder="វាយអត្ថបទសារទីនេះ..."></textarea>
         </div>
 
-        <!-- 🆕 កែសម្រួលត្រង់នេះឱ្យអាចជ្រើសរើសរូបភាពច្រើនបាន (Multiple Images) -->
         <div class="form-group">
             <label for="images">ភ្ជាប់រូបភាពជាច្រើន (Images - Optional):</label>
             <input type="file" id="images" name="images" accept="image/*" multiple>
@@ -207,7 +215,40 @@
 </div>
 
 <script>
-    document.addEventListener('DOMContentLoaded', loadSchedules);
+    document.addEventListener('DOMContentLoaded', () => {
+        loadSchedules();
+        loadGroups(); // 🆕 ទាញយកបញ្ជី Group ពេលទំព័រ โหลดរួច
+    });
+
+    // 🆕 មុខងារទាញយកបញ្ជី Group ពី Server (ឧទាហរណ៍ API: /api/groups)
+    async function loadGroups() {
+        try {
+            const res = await fetch('/api/groups');
+            const data = await res.json();
+            const groupSelect = document.getElementById('groupSelect');
+
+            if (data.success && data.groups && data.groups.length > 0) {
+                data.groups.forEach(group => {
+                    const option = document.createElement('option');
+                    // สมมติថា group មាន id/chat_id និង name
+                    option.value = group.chat_id || group.id; 
+                    option.textContent = group.name;
+                    groupSelect.appendChild(option);
+                });
+            }
+        } catch (err) {
+            console.error('មិនអាចទាញយកបញ្ជី Group បានទេ:', err);
+        }
+    }
+
+    // 🆕 ពេលជ្រើសរើស Group ពី Dropdown វាจะយករត់មកដាក់ក្នុងช่อง phoneNumber ស្វ័យប្រវត្តិ
+    function onGroupSelected() {
+        const groupSelect = document.getElementById('groupSelect');
+        const phoneNumberInput = document.getElementById('phoneNumber');
+        if (groupSelect.value) {
+            phoneNumberInput.value = groupSelect.value;
+        }
+    }
 
     // ទាញយកបញ្ជី Schedule មកបង្ហាញ
     async function loadSchedules() {
@@ -247,7 +288,7 @@
         }
     }
 
-    // 处理 Submit សម្រាប់ Schedule (បង្កើត ឬ កែប្រែ)
+    // Handle Submit សម្រាប់ Schedule (បង្កើត ឬ កែប្រែ)
     function handleScheduleSubmit() {
         const editId = document.getElementById('editId').value;
         if (editId) {
@@ -329,6 +370,7 @@
         document.getElementById('editId').value = item.id;
         document.getElementById('channel').value = item.channel;
         document.getElementById('phoneNumber').value = item.recipient || '';
+        document.getElementById('groupSelect').value = item.recipient || ''; // 🆕 ព្យាយាមเลือก Group តាម recipient
         document.getElementById('message').value = item.message || '';
         
         const d = new Date(item.schedule_time);

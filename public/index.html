@@ -133,6 +133,22 @@
 </head>
 <body>
 
+<!-- 🆕 ប្រអប់សម្រាប់បន្ថែម Group ថ្មី -->
+<div class="container" style="background: #f8fafc; border: 1.5px dashed #cbd5e1;">
+    <h3>➕ បង្កើត Group ឬ Chat ID ថ្មី</h3>
+    <div class="form-group">
+        <label for="newGroupName">ឈ្មោះ Group (Group Name):</label>
+        <input type="text" id="newGroupName" placeholder="ឧ. គ្រុបផ្នែកលក់ (Sales)">
+    </div>
+    <div class="form-group">
+        <label for="newGroupId">Chat ID ឬ លេខទូរស័ព្ទ:</label>
+        <input type="text" id="newGroupId" placeholder="ឧ. -100123456789">
+    </div>
+    <button type="button" class="btn-send" onclick="addNewGroup()" style="width: 100%;">
+        💾 រក្សាទុក Group ថ្មី
+    </button>
+</div>
+
 <div class="container">
     <h2 id="formTitle">Notification Hub (Telegram / LINE / WhatsApp)</h2>
     <form id="notifyForm" enctype="multipart/form-data">
@@ -148,12 +164,11 @@
             </select>
         </div>
 
-        <!-- 🆕 បន្ថែម Dropdown សម្រាប់ជ្រើសរើស Group នីមួយៗ -->
+        <!-- 🆕 Dropdown ជ្រើសរើស Group -->
         <div class="form-group">
             <label for="groupSelect">ជ្រើសរើសគ្រុប (Select Group):</label>
             <select id="groupSelect" name="groupSelect" onchange="onGroupSelected()">
                 <option value="">-- ជ្រើសរើសគ្រុប ឬបញ្ចូលដោយដៃខាងក្រោម --</option>
-                <!-- ទិន្នន័យគ្រុបនឹងត្រូវទាញមកដាក់ទីនេះដោយស្វ័យប្រវត្តិ -->
             </select>
         </div>
 
@@ -217,21 +232,54 @@
 <script>
     document.addEventListener('DOMContentLoaded', () => {
         loadSchedules();
-        loadGroups(); // 🆕 ទាញយកបញ្ជី Group ពេលទំព័រ โหลดរួច
+        loadGroups(); // ទាញយកបញ្ជី Group ពេលទំព័របើករួច
     });
 
-    // 🆕 មុខងារទាញយកបញ្ជី Group ពី Server (ឧទាហរណ៍ API: /api/groups)
+    // 🆕 មុខងារបន្ថែម Group ថ្មីទៅកាន់ Database
+    async function addNewGroup() {
+        const name = document.getElementById('newGroupName').value.trim();
+        const groupId = document.getElementById('newGroupId').value.trim();
+
+        if (!name || !groupId) {
+            showAlert('សូមបំពេញឈ្មោះ Group និង Chat ID ឱ្យបានគ្រប់ជ្រុងជ្រោយ!', false);
+            return;
+        }
+
+        try {
+            const response = await fetch('/api/groups', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ groupId, name })
+            });
+            const result = await response.json();
+
+            if (result.success) {
+                showAlert(result.message, true);
+                document.getElementById('newGroupName').value = '';
+                document.getElementById('newGroupId').value = '';
+                loadGroups(); // Refresh បញ្ជី Dropdown ឡើងវិញស្វ័យប្រវត្តិ
+            } else {
+                showAlert('បរាជ័យ៖ ' + result.error, false);
+            }
+        } catch (err) {
+            console.error('Error:', err);
+            showAlert('មានបញ្ហាក្នុងការតភ្ជាប់ទៅកាន់ Server!', false);
+        }
+    }
+
+    // 🆕 ទាញយកបញ្ជី Group ពី Database មកដាក់ក្នុង Dropdown
     async function loadGroups() {
         try {
             const res = await fetch('/api/groups');
             const data = await res.json();
             const groupSelect = document.getElementById('groupSelect');
 
+            groupSelect.innerHTML = '<option value="">-- ជ្រើសរើសគ្រុប ឬបញ្ចូលដោយដៃខាងក្រោម --</option>';
+
             if (data.success && data.groups && data.groups.length > 0) {
                 data.groups.forEach(group => {
                     const option = document.createElement('option');
-                    // สมมติថា group មាន id/chat_id និង name
-                    option.value = group.chat_id || group.id; 
+                    option.value = group.id; 
                     option.textContent = group.name;
                     groupSelect.appendChild(option);
                 });
@@ -241,7 +289,7 @@
         }
     }
 
-    // 🆕 ពេលជ្រើសរើស Group ពី Dropdown វាจะយករត់មកដាក់ក្នុងช่อง phoneNumber ស្វ័យប្រវត្តិ
+    // ពេលជ្រើសរើស Group វានឹងយក ID មកដាក់ក្នុងប្រអប់ phoneNumber ស្វ័យប្រវត្តិ
     function onGroupSelected() {
         const groupSelect = document.getElementById('groupSelect');
         const phoneNumberInput = document.getElementById('phoneNumber');
@@ -370,7 +418,7 @@
         document.getElementById('editId').value = item.id;
         document.getElementById('channel').value = item.channel;
         document.getElementById('phoneNumber').value = item.recipient || '';
-        document.getElementById('groupSelect').value = item.recipient || ''; // 🆕 ព្យាយាមเลือก Group តាម recipient
+        document.getElementById('groupSelect').value = item.recipient || '';
         document.getElementById('message').value = item.message || '';
         
         const d = new Date(item.schedule_time);

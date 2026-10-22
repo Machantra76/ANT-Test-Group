@@ -289,6 +289,27 @@ app.post('/api/notify/schedule', upload.array('images', 10), async (req, res) =>
 });
 
 // -------------------------------------------------------------
+// 🆕 មុខងារថ្មី៖ API សម្រាប់ទាញយកបញ្ជីគ្រុប (Groups) សម្រាប់ Dropdown Select
+// -------------------------------------------------------------
+app.get('/api/groups', async (req, res) => {
+    try {
+        // អ្នកអាចកែសម្រួលបន្ថែមបញ្ជីគ្រុបរបស់អ្នកនៅទីនេះ ឬទាញយកពី Database ផ្ទាល់
+        const groupsList = [
+            { id: "-100123456789", name: "គ្រុបទី១ (Telegram)" },
+            { id: "-100987654321", name: "គ្រុបទី២ (Telegram)" }
+        ];
+
+        res.json({
+            success: true,
+            groups: groupsList
+        });
+    } catch (err) {
+        console.error('Error fetching groups:', err);
+        res.status(500).json({ success: false, error: 'មិនអាចទាញយកបញ្ជីគ្រុបបានទេ' });
+    }
+});
+
+// -------------------------------------------------------------
 // មុខងារបន្ថែម៖ មើលបញ្ជី, កែប្រែ, និងលុប Schedule
 // -------------------------------------------------------------
 

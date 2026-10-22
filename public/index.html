@@ -27,7 +27,7 @@
 
         .container { 
             width: 100%;
-            max-width: 800px; 
+            max-width: 850px; 
             background: #ffffff; 
             padding: 35px 30px; 
             border-radius: 16px; 
@@ -216,6 +216,7 @@
             <thead>
                 <tr>
                     <th>Channel</th>
+                    <th>ឈ្មោះគ្រុប / Chat ID</th>
                     <th>សារ</th>
                     <th>ម៉ោងផ្ញើ</th>
                     <th>ស្ថានភាព</th>
@@ -223,7 +224,7 @@
                 </tr>
             </thead>
             <tbody id="scheduleTableBody">
-                <tr><td colspan="5" style="text-align:center;">កំពុងទាញយកទិន្នន័យ...</td></tr>
+                <tr><td colspan="6" style="text-align:center;">កំពុងទាញយកទិន្នន័យ...</td></tr>
             </tbody>
         </table>
     </div>
@@ -267,7 +268,7 @@
         }
     }
 
-    // 🆕 ទាញយកបញ្ជី Group ពី Database មកដាក់ក្នុង Dropdown
+    // 🆕 ទាញយកបញ្ជី Group ពី Database មកដាក់ក្នុង Dropdown (រក្សាទុក group_id ក្នុង dataset)
     async function loadGroups() {
         try {
             const res = await fetch('/api/groups');
@@ -298,7 +299,7 @@
         }
     }
 
-    // ទាញយកបញ្ជី Schedule មកបង្ហាញ
+    // 🆕 ទាញយកបញ្ជី Schedule មកបង្ហាញ (រួមទាំងឈ្មោះគ្រុប)
     async function loadSchedules() {
         try {
             const res = await fetch('/api/schedules');
@@ -306,7 +307,7 @@
             const tbody = document.getElementById('scheduleTableBody');
 
             if (!data.success || data.schedules.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;">គ្មានសារកំណត់ពេលនៅឡើយទេ</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;">គ្មានសារកំណត់ពេលនៅឡើយទេ</td></tr>';
                 return;
             }
 
@@ -316,9 +317,15 @@
                 if (item.status === 'Sent') badgeClass = 'badge-sent';
                 if (item.status.startsWith('Failed')) badgeClass = 'badge-failed';
 
+                // បង្ហាញឈ្មោះគ្រុប ប្រសិនបើមានក្នុង Database
+                const displayRecipient = item.group_name 
+                    ? `<span style="color: #2563eb; font-weight: 600;">📁 ${item.group_name}</span><br><small style="color: #64748b;">(${item.recipient})</small>` 
+                    : (item.recipient || 'N/A');
+
                 return `
                     <tr>
                         <td><strong>${item.channel.toUpperCase()}</strong></td>
+                        <td>${displayRecipient}</td>
                         <td>${item.message || '[រូបភាព]'}</td>
                         <td>${dateStr}</td>
                         <td><span class="badge ${badgeClass}">${item.status}</span></td>

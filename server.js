@@ -101,46 +101,7 @@ const lineClient = (lineConfig.channelAccessToken && !lineConfig.channelAccessTo
     ? new line.Client(lineConfig)
     : null;
 
-// 🆕 Function សម្រាប់សរសេរអត្ថបទ/Date ដាក់លើរូបភាពជានិច្ច
-// Function សម្រាប់សរសេរអត្ថបទដាក់នៅផ្នែកខាងលើនៃរូបភាព
-async function addTextToImage(imageBuffer, text) {
-    if (!text) return imageBuffer;
-    try {
-        const metadata = await sharp(imageBuffer).metadata();
-        const width = metadata.width || 800;
-        const height = metadata.height || 600;
-
-        const svgText = `
-            <svg width="${width}" height="${height}">
-                <style>
-                    .text {
-                        fill: #ffffff;
-                        font-size: ${Math.max(24, Math.floor(width / 30))}px;
-                        font-weight: bold;
-                        font-family: Arial, sans-serif;
-                    }
-                    .bg {
-                        fill: rgba(0, 0, 0, 0.65);
-                    }
-                </style>
-                <rect x="0" y="0" width="${width}" height="100" class="bg" />
-                <text x="30" y="65" class="text">${text}</text>
-            </svg>
-        `;
-
-        const modifiedBuffer = await sharp(imageBuffer)
-            .composite([{ input: Buffer.from(svgText), top: 0, left: 0 }])
-            .toBuffer();
-
-        return modifiedBuffer;
-    } catch (err) {
-        console.error('❌ [Image Processing Error]:', err.message);
-        return imageBuffer;
-    }
-}
-
-// ៧. Core Function សម្រាប់បញ្ជូនសារតាម Platform (พร้อมระบบبិតអត្ថបទលើរូបភាព)
-// ៧. Core Function សម្រាប់បញ្ជូនសារតាម Platform (ផ្ញើអត្ថបទទៅមុន រួចផ្ញើរូបភាពតាមក្រោយ)
+// ៧. Core Function សម្រាប់បញ្ជូនសារតាម Platform (គាំទ្រការផ្ញើចូល Chat ID ច្រើនព្រមគ្នា)
 async function sendNotification(channel, recipient, message, fileBuffer, fileMime) {
     let tempFilePath = null;
     if (fileBuffer) {
@@ -150,19 +111,29 @@ async function sendNotification(channel, recipient, message, fileBuffer, fileMim
     }
 
     try {
-        // --- Telegram ---
+        // --- Telegram (รองรับหลาย Group โดยคั่นด้วยเครื่องหมายจุลภาค ,) ---
         if (channel === 'telegram' || channel === 'broadcast') {
-            const targetId = recipient || process.env.TELEGRAM_GROUP_CHAT_ID;
-            if (targetId && telegramBot) {
-                // ១. ផ្ញើអត្ថបទ (Message) ទៅមុន
-                if (message) {
-                    await telegramBot.sendMessage(targetId, message, { parse_mode: 'HTML' });
+            const rawTargets = recipient || process.env.TELEGRAM_GROUP_CHAT_ID || '';
+            // បំបែក Chat ID ជា Array តាមរយៈសញ្ញាក្បៀស (,) ឧទាហរណ៍: -100xxx,-100yyy
+            const targetIds = rawTargets.split(',').map(id => id.trim()).filter(id => id.length > 0);
+
+            if (telegramBot && targetIds.length > 0) {
+                for (const targetId of targetIds) {
+                    try {
+                        // ១. ផ្ញើអត្ថបទ (Message) ទៅមុន
+                        if (message) {
+                            await telegramBot.sendMessage(targetId, message, { parse_mode: 'HTML' });
+                        }
+                        // ២. ផ្ញើរូបភាព (Image) តាមក្រោយ
+                        if (tempFilePath) {
+                            await telegramBot.sendPhoto(targetId, tempFilePath);
+                        }
+                        await saveLog('Telegram', targetId, message || '[Photo]', 'Success');
+                    } catch (singleErr) {
+                        console.error(`❌ [Telegram Error for ID ${targetId}]:`, singleErr.message);
+                        await saveLog('Telegram', targetId, message || '[Photo]', `Failed: ${singleErr.message}`);
+                    }
                 }
-                // ២. ផ្ញើរូបភាព (Image) តាមក្រោយ
-                if (tempFilePath) {
-                    await telegramBot.sendPhoto(targetId, tempFilePath);
-                }
-                await saveLog('Telegram', targetId, message || '[Photo]', 'Success');
             }
         }
 
@@ -191,7 +162,7 @@ async function sendNotification(channel, recipient, message, fileBuffer, fileMim
                 const messages = [];
                 // ១. ផ្ញើអត្ថបទទៅមុន
                 if (message) messages.push({ type: 'text', text: message });
-                // ២. ផ្ញើរូបភាពតាមក្រោយ (LINE ត្រូវការ Image URL ផ្ទាល់ ដូច្នេះបើផ្ញើ Buffer គឺផ្ញើអត្ថបទ ឬត្រូវរៀបចំ URL)
+                // ២. ផ្ញើរូបភាពតាមក្រោយ
                 if (messages.length > 0) {
                     await lineClient.pushMessage(targetLineId, messages);
                     await saveLog('LINE', targetLineId, message || '[Photo]', 'Success');
@@ -333,7 +304,7 @@ app.put('/api/schedules/:id', upload.single('image'), async (req, res) => {
         } else {
             await pool.query(
                 `UPDATE scheduled_messages 
-                 SET channel = $1, recipient = $2, message = $3, schedule_time = $4, status = 'Pending'
+                 SET channel = $1, recipient = $2, message = $3, schedule_time = $4, status 'Pending'
                  WHERE id = $5`,
                 [channel, recipient, message, targetDate.toISOString(), id]
             );

@@ -28,7 +28,7 @@ const pool = new Pool({
     ssl: { rejectUnauthorized: false }
 });
 
-// ២. បង្កើតតារាងក្នុង Database បើមិនទាន់មាន (គាំទ្ររូបភាពច្រើនជា JSON Array នៃ ByteA ឬ Text)
+// ២. បង្កើតតារាងក្នុង Database បើមិនទាន់មាន (រួមទាំង Table groups សម្រាប់រក្សាទុក Group ថ្មី)
 async function initDatabase() {
     try {
         await pool.query(`
@@ -50,6 +50,15 @@ async function initDatabase() {
                 images_data TEXT, -- រក្សាទុកជា JSON string នៃ buffer និង mimetype រូបភាពច្រើន
                 schedule_time TIMESTAMP WITH TIME ZONE NOT NULL,
                 status VARCHAR(50) DEFAULT 'Pending',
+                created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+            );
+        `);
+        // 🆕 បង្កើត Table សម្រាប់រក្សាទុកបញ្ជី Group
+        await pool.query(`
+            CREATE TABLE IF NOT EXISTS groups (
+                id SERIAL PRIMARY KEY,
+                group_id VARCHAR(100) UNIQUE NOT NULL,
+                name VARCHAR(150) NOT NULL,
                 created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
             );
         `);
@@ -289,23 +298,38 @@ app.post('/api/notify/schedule', upload.array('images', 10), async (req, res) =>
 });
 
 // -------------------------------------------------------------
-// 🆕 មុខងារថ្មី៖ API សម្រាប់ទាញយកបញ្ជីគ្រុប (Groups) សម្រាប់ Dropdown Select
+// 🆕 មុខងារបន្ថែម៖ API សម្រាប់បង្កើត និង ទាញយកបញ្ជី Group ពី Database
 // -------------------------------------------------------------
+
+// ១២. API ទាញយកបញ្ជី Group ទាំងអស់
 app.get('/api/groups', async (req, res) => {
     try {
-        // អ្នកអាចកែសម្រួលបន្ថែមបញ្ជីគ្រុបរបស់អ្នកនៅទីនេះ ឬទាញយកពី Database ផ្ទាល់
-        const groupsList = [
-            { id: "-100123456789", name: "គ្រុបទី១ (Telegram)" },
-            { id: "-100987654321", name: "គ្រុបទី២ (Telegram)" }
-        ];
-
+        const result = await pool.query("SELECT group_id as id, name FROM groups ORDER BY id DESC");
         res.json({
             success: true,
-            groups: groupsList
+            groups: result.rows
         });
     } catch (err) {
         console.error('Error fetching groups:', err);
         res.status(500).json({ success: false, error: 'មិនអាចទាញយកបញ្ជីគ្រុបបានទេ' });
+    }
+});
+
+// ១៣. API បង្កើត Group ថ្មីចូល Database
+app.post('/api/groups', async (req, res) => {
+    const { groupId, name } = req.body;
+    if (!groupId || !name) {
+        return res.status(400).json({ success: false, error: 'សូមបញ្ចូល Chat ID និងឈ្មោះ Group ឱ្យបានត្រឹមត្រូវ!' });
+    }
+    try {
+        const result = await pool.query(
+            'INSERT INTO groups (group_id, name) VALUES ($1, $2) RETURNING *',
+            [groupId, name]
+        );
+        res.json({ success: true, message: 'បានបង្កើត Group ថ្មីដោយជោគជ័យ!', group: result.rows[0] });
+    } catch (err) {
+        console.error('Error adding group:', err);
+        res.status(500).json({ success: false, error: 'Group ID នេះមានរួចហើយ ឬមានបញ្ហាក្នុងការរក្សាទុក!' });
     }
 });
 

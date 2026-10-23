@@ -185,14 +185,19 @@ async function sendNotification(channel, recipient, message, imagesArray) {
         }
 
         // --- LINE (កែសម្រួលដើម្បីបង្ការកុំឱ្យ Error 500) ---
+       // --- LINE ---
         if (channel === 'line' || channel === 'broadcast') {
-            const targetLineId = (recipient && recipient.startsWith('U')) ? recipient : process.env.LINE_USER_ID;
+            // ពិនិត្យមើលថាតើ recipient មានតម្លៃហើយឬยัง បើគ្មានទើបប្រើ LINE_USER_ID ជំនួស
+            let targetLineId = recipient;
+            if (!targetLineId || (!targetLineId.startsWith('U') && !targetLineId.startsWith('C'))) {
+                targetLineId = process.env.LINE_USER_ID;
+            }
             
             if (!lineClient) {
-                throw new Error('LINE Client មិនទាន់ត្រូវបានកំណត់ cấu hình (Channel Access Token ខុស ឬទว่างเปล่า)!');
+                throw new Error('LINE Client មិនទាន់ត្រូវបានកំណត់ cấu hình!');
             }
             if (!targetLineId) {
-                throw new Error('រកមិនឃើញ LINE_USER_ID សម្រាប់ផ្ញើសារ!');
+                throw new Error('រកមិនឃើញ LINE Target ID (User ID ឬ Group ID) សម្រាប់ផ្ញើសារ!');
             }
 
             const messages = [];
@@ -202,7 +207,7 @@ async function sendNotification(channel, recipient, message, imagesArray) {
                 try {
                     await lineClient.pushMessage(targetLineId, messages);
                     await saveLog('LINE', targetLineId, message || '[Photos]', 'Success');
-                    console.log(`✅ [LINE Success] បានផ្ញើសារទៅកាន់ User ID: ${targetLineId}`);
+                    console.log(`✅ [LINE Success] បានផ្ញើសារទៅកាន់ Target ID: ${targetLineId}`);
                 } catch (lineApiErr) {
                     console.error(`❌ [LINE API Error details]:`, lineApiErr.originalError?.response?.data || lineApiErr.message);
                     throw new Error(`LINE API Failed: ${lineApiErr.message}`);

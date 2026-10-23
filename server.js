@@ -287,6 +287,27 @@ app.post('/api/notify/send', upload.array('images', 10), async (req, res) => {
         res.status(500).json({ success: false, error: err.message });
     }
 });
+// LINE Webhook Endpoint សម្រាប់ទទួល Event ផ្សេងៗ
+app.post('/webhook', line.middleware(lineConfig), async (req, res) => {
+    try {
+        const events = req.body.events || [];
+        for (const event of events) {
+            if (event.source) {
+                console.log(`📌 [LINE Webhook Source Type]: ${event.source.type}`);
+                if (event.source.groupId) {
+                    console.log(`🎯 [LINE GROUP ID រកឃើញ]: ${event.source.groupId}`);
+                }
+                if (event.source.userId) {
+                    console.log(`👤 [LINE User ID]: ${event.source.userId}`);
+                }
+            }
+        }
+        res.status(200).json({ success: true });
+    } catch (err) {
+        console.error('❌ [Webhook Error]:', err);
+        res.status(500).end();
+    }
+});
 
 app.post('/api/notify/schedule', upload.array('images', 10), async (req, res) => {
     const { channel, message, scheduleTime, phoneNumber, userId, isDaily } = req.body;

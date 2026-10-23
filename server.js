@@ -123,7 +123,7 @@ const lineClient = (lineConfig.channelAccessToken && !lineConfig.channelAccessTo
     ? new line.Client(lineConfig)
     : null;
 
-// ៧. Core Function សម្រាប់បញ្ជូនសារ (បានកែសម្រួល Error Handling ឱ្យកាន់តែរឹងមាំ)
+// ៧. Core Function សម្រាប់បញ្ជូនសារ
 async function sendNotification(channel, recipient, message, imagesArray) {
     let tempFilePaths = [];
     
@@ -184,10 +184,8 @@ async function sendNotification(channel, recipient, message, imagesArray) {
             }
         }
 
-        // --- LINE (កែសម្រួលដើម្បីបង្ការកុំឱ្យ Error 500) ---
-       // --- LINE ---
+        // --- LINE ---
         if (channel === 'line' || channel === 'broadcast') {
-            // ពិនិត្យមើលថាតើ recipient មានតម្លៃហើយឬยัง បើគ្មានទើបប្រើ LINE_USER_ID ជំនួស
             let targetLineId = recipient;
             if (!targetLineId || (!targetLineId.startsWith('U') && !targetLineId.startsWith('C'))) {
                 targetLineId = process.env.LINE_USER_ID;
@@ -223,7 +221,7 @@ async function sendNotification(channel, recipient, message, imagesArray) {
     }
 }
 
-// ៨. Worker ឆែកសាររង់ចាំ
+// ៨. Worker ឆែកសាររង់ចាំ (Cron Job Processing)
 async function processPendingSchedules() {
     const result = await pool.query(
         `SELECT * FROM scheduled_messages WHERE status = 'Pending' AND schedule_time <= NOW()`
@@ -236,29 +234,28 @@ async function processPendingSchedules() {
     for (const item of pendingTasks) {
         try {
             let imagesArray = item.images_data ? JSON.parse(item.images_data) : [];
+            
+            // 🚀 ផ្ញើសារចេញ (សារត្រូវបានទាញតម្លៃស្របតាម schedule_time ស្រាប់ពី Frontend)
             await sendNotification(item.channel, item.recipient, item.message, imagesArray);
 
             if (item.is_daily) {
+                // 🔄 ប្រសិនបើជាសារប្រចាំថ្ងៃ ត្រូវបូកបន្ថែម ១ ថ្ងៃទៅឱ្យ "ម៉ោងផ្ញើ" សម្រាប់ថ្ងៃស្អែក
                 const currentScheduledDate = new Date(item.schedule_time);
                 currentScheduledDate.setDate(currentScheduledDate.getDate() + 1);
 
-                let updatedMessage = item.message;
-                if (updatedMessage) {
-                    const day = String(currentScheduledDate.getDate()).padStart(2, '0');
-                    const month = String(currentScheduledDate.getMonth() + 1).padStart(2, '0');
-                    const year = currentScheduledDate.getFullYear();
-                    updatedMessage = updatedMessage.replace(/\b\d{2}-\d{2}-\d{4}\b/g, `${day}-${month}-${year}`);
-                }
-
+                // បច្ចុប្បន្នភាព schedule_time ថ្មី និងរក្សា status ជា Pending ដើម្បីឱ្យវាដេញឡើងរាល់ថ្ងៃ
                 await pool.query(
-                    `UPDATE scheduled_messages SET schedule_time = schedule_time + INTERVAL '1 day', message = $1, status = 'Pending' WHERE id = $2`,
-                    [updatedMessage, item.id]
+                    `UPDATE scheduled_messages SET schedule_time = $1, status = 'Pending' WHERE id = $2`,
+                    [currentScheduledDate.toISOString(), item.id]
                 );
+                console.log(`🔄 [Daily Schedule] បានអាប់ដេតម៉ោងផ្ញើសម្រាប់ថ្ងៃស្អែក៖ ${currentScheduledDate.toLocaleString()}`);
             } else {
+                // ប្រសិនបើជាសារផ្ញើតែម្តង ប្តូរ status ទៅជា Sent
                 await pool.query("UPDATE scheduled_messages SET status = 'Sent' WHERE id = $1", [item.id]);
             }
             successCount++;
         } catch (err) {
+            console.error(`❌ [Schedule Error ID ${item.id}]:`, err.message);
             await pool.query("UPDATE scheduled_messages SET status = $1 WHERE id = $2", [`Failed: ${err.message}`, item.id]);
         }
     }
@@ -274,7 +271,7 @@ app.get('/api/run-cron', async (req, res) => {
     }
 });
 
-// ១០. API ផ្ញើសារភ្លាមៗ (Return JSON Error ច្បាស់លាស់ដល់ Frontend)
+// ១០. API ផ្ញើសារភ្លាមៗ (Send Now)
 app.post('/api/notify/send', upload.array('images', 10), async (req, res) => {
     const { channel, message, phoneNumber, userId } = req.body;
     const recipient = phoneNumber || userId || process.env.TELEGRAM_GROUP_CHAT_ID;
@@ -292,8 +289,8 @@ app.post('/api/notify/send', upload.array('images', 10), async (req, res) => {
         res.status(500).json({ success: false, error: err.message });
     }
 });
-// LINE Webhook Endpoint សម្រាប់ទទួល Event ផ្សេងៗ
-// LINE Webhook Endpoint បែបសាមញ្ញ (ការពារបញ្ហា 404 និង Middleware)
+
+// LINE Webhook Endpoint
 app.post('/webhook', async (req, res) => {
     try {
         const events = req.body.events || [];
@@ -311,7 +308,7 @@ app.post('/webhook', async (req, res) => {
         res.status(200).json({ success: true });
     } catch (err) {
         console.error('❌ [Webhook Error]:', err);
-        res.status(200).json({ success: false }); // ឆ្លើយតប 200 ជានិច្ចដើម្បីកុំឱ្យ LINE Error
+        res.status(200).json({ success: false });
     }
 });
 

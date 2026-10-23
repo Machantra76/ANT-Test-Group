@@ -114,6 +114,7 @@
         .badge-pending { background-color: #fef3c7; color: #d97706; }
         .badge-sent { background-color: #dcfce7; color: #15803d; }
         .badge-failed { background-color: #fee2e2; color: #b91c1c; }
+        .badge-daily { background-color: #e0e7ff; color: #4338ca; }
 
         .btn-action { padding: 6px 10px; font-size: 12px; border-radius: 6px; margin-right: 4px; }
         .btn-edit { background-color: #f59e0b; color: white; }
@@ -192,6 +193,14 @@
             <input type="datetime-local" id="scheduleTime" name="scheduleTime">
         </div>
 
+        <!-- 🔄 Checkbox សម្រាប់ជ្រើសរើសផ្ញើស្វ័យប្រវត្តិរាល់ថ្ងៃ -->
+        <div class="form-group" style="display: flex; align-items: center; gap: 10px; background: #f8fafc; padding: 12px; border-radius: 8px; border: 1.5px solid #cbd5e1;">
+            <input type="checkbox" id="isDaily" name="isDaily" value="true" style="width: 20px; height: 20px; cursor: pointer;">
+            <label for="isDaily" style="margin-bottom: 0; cursor: pointer; color: #0f172a; font-weight: 600;">
+                🔄 ផ្ញើស្វ័យប្រវត្តិរាល់ថ្ងៃ (Daily Auto-Send)
+            </label>
+        </div>
+
         <div class="btn-group">
             <button type="button" id="btnSend" class="btn-send" onclick="submitForm('/api/notify/send')">
                 🚀 ផ្ញើភ្លាមៗ (Send Now)
@@ -268,7 +277,7 @@
         }
     }
 
-    // 🆕 ទាញយកបញ្ជី Group ពី Database មកដាក់ក្នុង Dropdown (រក្សាទុក group_id ក្នុង dataset)
+    // 🆕 ទាញយកបញ្ជី Group ពី Database មកដាក់ក្នុង Dropdown
     async function loadGroups() {
         try {
             const res = await fetch('/api/groups');
@@ -299,7 +308,7 @@
         }
     }
 
-    // 🆕 ទាញយកបញ្ជី Schedule មកបង្ហាញ (រួមទាំងឈ្មោះគ្រុប)
+    // 🆕 ទាញយកបញ្ជី Schedule មកបង្ហាញ (រួមទាំងឈ្មោះគ្រុប និងសញ្ញារស្វ័យប្រវត្តិរាល់ថ្ងៃ)
     async function loadSchedules() {
         try {
             const res = await fetch('/api/schedules');
@@ -322,9 +331,12 @@
                     ? `<span style="color: #2563eb; font-weight: 600;">📁 ${item.group_name}</span><br><small style="color: #64748b;">(${item.recipient})</small>` 
                     : (item.recipient || 'N/A');
 
+                // 🔄 បង្ហាញ Badge ថែម បើជាសារផ្ញើប្រចាំថ្ងៃ
+                const dailyBadgeHtml = item.is_daily ? `<br><span class="badge badge-daily" style="margin-top:4px; display:inline-block;">🔄 ផ្ញើប្រចាំថ្ងៃ</span>` : '';
+
                 return `
                     <tr>
-                        <td><strong>${item.channel.toUpperCase()}</strong></td>
+                        <td><strong>${item.channel.toUpperCase()}</strong>${dailyBadgeHtml}</td>
                         <td>${displayRecipient}</td>
                         <td>${item.message || '[រូបភាព]'}</td>
                         <td>${dateStr}</td>
@@ -420,17 +432,25 @@
         }
     }
 
-    // ដាក់ទិន្នន័យចូល Form ពេលចុចប៊ូតុង "កែរ"
+    // 🛠️ ដាក់ទិន្នន័យចូល Form ពេលចុចប៊ូតុង "កែរ" (កែប្រែទាញម៉ោង Local ត្រូវចំ ១០០%)
     function editSchedule(item) {
         document.getElementById('editId').value = item.id;
         document.getElementById('channel').value = item.channel;
         document.getElementById('phoneNumber').value = item.recipient || '';
         document.getElementById('groupSelect').value = item.recipient || '';
         document.getElementById('message').value = item.message || '';
+        document.getElementById('isDaily').checked = item.is_daily || false;
         
-        const d = new Date(item.schedule_time);
-        d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
-        document.getElementById('scheduleTime').value = d.toISOString().slice(0, 16);
+        if (item.schedule_time) {
+            const d = new Date(item.schedule_time);
+            const year = d.getFullYear();
+            const month = String(d.getMonth() + 1).padStart(2, '0');
+            const day = String(d.getDate()).padStart(2, '0');
+            const hours = String(d.getHours()).padStart(2, '0');
+            const minutes = String(d.getMinutes()).padStart(2, '0');
+            
+            document.getElementById('scheduleTime').value = `${year}-${month}-${day}T${hours}:${minutes}`;
+        }
 
         document.getElementById('formTitle').textContent = 'កែប្រែកាលវិភាគផ្ញើសារ';
         document.getElementById('btnSend').style.display = 'none';
@@ -462,6 +482,7 @@
     function resetForm() {
         document.getElementById('notifyForm').reset();
         document.getElementById('editId').value = '';
+        document.getElementById('isDaily').checked = false;
         document.getElementById('formTitle').textContent = 'Notification Hub (Telegram / LINE / WhatsApp)';
         document.getElementById('btnSend').style.display = 'inline-flex';
         document.getElementById('btnSchedule').textContent = '⏰ កំណត់ពេល (Schedule)';

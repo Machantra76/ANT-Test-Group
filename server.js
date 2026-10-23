@@ -120,7 +120,7 @@ const lineClient = (lineConfig.channelAccessToken && !lineConfig.channelAccessTo
     ? new line.Client(lineConfig)
     : null;
 
-// ៧. Core Function សម្រាប់បញ្ជូនសារ និងរូបភាពច្រើនតាម Platform
+// ៧. Core Function សម្រាប់បញ្ជូនសារ និងរូបភាពច្រើនតាម Platform (បានកែសម្រួល LINE ឱ្យទាញយក LINE_USER_ID ស្វ័យប្រវត្តិ)
 async function sendNotification(channel, recipient, message, imagesArray) {
     let tempFilePaths = [];
     
@@ -129,7 +129,6 @@ async function sendNotification(channel, recipient, message, imagesArray) {
         if (imagesArray && imagesArray.length > 0) {
             for (let i = 0; i < imagesArray.length; i++) {
                 const imgObj = imagesArray[i];
-                // imgObj អាចជា object ដែលមាន buffer (from db) ឬ multer file object
                 const buffer = imgObj.buffer?.type === 'Buffer' ? Buffer.from(imgObj.buffer.data) : (imgObj.buffer || imgObj);
                 const mimetype = imgObj.mimetype || 'image/jpeg';
                 const ext = mimetype.split('/')[1] || 'jpg';
@@ -140,7 +139,7 @@ async function sendNotification(channel, recipient, message, imagesArray) {
             }
         }
 
-        // --- Telegram (គាំទ្រការផ្ញើ Chat ID ច្រើន និងរូបភាពច្រើន) ---
+        // --- Telegram ---
         if (channel === 'telegram' || channel === 'broadcast') {
             const rawTargets = recipient || process.env.TELEGRAM_GROUP_CHAT_ID || '';
             const targetIds = rawTargets.split(',').map(id => id.trim()).filter(id => id.length > 0);
@@ -148,11 +147,9 @@ async function sendNotification(channel, recipient, message, imagesArray) {
             if (telegramBot && targetIds.length > 0) {
                 for (const targetId of targetIds) {
                     try {
-                        // ១. ផ្ញើអត្ថបទ (Message) ទៅមុន
                         if (message) {
                             await telegramBot.sendMessage(targetId, message, { parse_mode: 'HTML' });
                         }
-                        // ២. ផ្ញើរូបភាពទាំងអស់តាមក្រោយ (អាចផ្ញើជា MediaGroup បើមានច្រើន ឬ sendPhoto ម្ដងមួយ)
                         if (tempFilePaths.length > 0) {
                             for (const fileObj of tempFilePaths) {
                                 await telegramBot.sendPhoto(targetId, fileObj.path);
@@ -172,11 +169,9 @@ async function sendNotification(channel, recipient, message, imagesArray) {
             const cleanNumber = (recipient || '').replace(/[^0-9]/g, '');
             if (cleanNumber) {
                 const formattedNumber = `${cleanNumber}@c.us`;
-                // ១. ផ្ញើអត្ថបទ (Message) ទៅមុន
                 if (message) {
                     await whatsappClient.sendMessage(formattedNumber, message);
                 }
-                // ២. ផ្ញើរូបភាពទាំងអស់តាមក្រោយ
                 for (const fileObj of tempFilePaths) {
                     const fileBuffer = fs.readFileSync(fileObj.path);
                     const media = new MessageMedia(fileObj.mimetype, fileBuffer.toString('base64'), 'image.jpg');
@@ -186,20 +181,23 @@ async function sendNotification(channel, recipient, message, imagesArray) {
             }
         }
 
-        // --- LINE ---
+        // --- LINE (បានកែសម្រួលដើម្បីបង្ការបញ្ហាខុស ID) ---
         if (channel === 'line' || channel === 'broadcast') {
-            const targetLineId = recipient || process.env.LINE_USER_ID;
+            const targetLineId = (recipient && recipient.startsWith('U')) ? recipient : process.env.LINE_USER_ID;
+            
             if (targetLineId && lineClient) {
                 const messages = [];
                 if (message) messages.push({ type: 'text', text: message });
                 if (messages.length > 0) {
                     await lineClient.pushMessage(targetLineId, messages);
                     await saveLog('LINE', targetLineId, message || '[Photos]', 'Success');
+                    console.log(`✅ [LINE Success] បានផ្ញើសារទៅកាន់ User ID: ${targetLineId}`);
                 }
+            } else {
+                console.error(`❌ [LINE Error]: រកមិនឃើញ LINE_USER_ID ឬ lineClient មិនទាន់ Active!`);
             }
         }
     } finally {
-        // លុប temporary files ចោលវិញក្រោយពេលផ្ញើចប់
         for (const fileObj of tempFilePaths) {
             if (fs.existsSync(fileObj.path)) {
                 fs.unlinkSync(fileObj.path);
@@ -208,7 +206,7 @@ async function sendNotification(channel, recipient, message, imagesArray) {
     }
 }
 
-// ៨. Logic ឆែកសាររង់ចាំ និងធ្វើការផ្ញើ (កែសម្រួលបន្ថែម Support Daily Auto-Send រាប់ថ្ងៃឡើង)
+// ៨. Logic ឆែកសាររង់ចាំ និងធ្វើការផ្ញើ (Daily Auto-Send)
 async function processPendingSchedules() {
     const result = await pool.query(
         `SELECT * FROM scheduled_messages WHERE status = 'Pending' AND schedule_time <= NOW()`
@@ -229,16 +227,12 @@ async function processPendingSchedules() {
                 imagesArray = JSON.parse(item.images_data);
             }
 
-            // ១. ផ្ញើសារចេញទៅ
             await sendNotification(item.channel, item.recipient, item.message, imagesArray);
 
-            // ២. ឆែកមើលបើជាសារប្រចាំថ្ងៃ (Daily Recurring) -> ថែម ១ ថ្ងៃ និង Update ថ្ងៃខែក្នុង Text ស្វ័យប្រវត្តិ
             if (item.is_daily) {
-                // គណនាថ្ងៃស្អែក
                 const currentScheduledDate = new Date(item.schedule_time);
                 currentScheduledDate.setDate(currentScheduledDate.getDate() + 1);
 
-                // កែប្រែថ្ងៃខែនៅក្នុងអត្ថបទអក្សរ (ប្រសិនបើមានទម្រង់ 23-10-2026)
                 let updatedMessage = item.message;
                 if (updatedMessage) {
                     const day = String(currentScheduledDate.getDate()).padStart(2, '0');
@@ -246,7 +240,6 @@ async function processPendingSchedules() {
                     const year = currentScheduledDate.getFullYear();
                     const newDateStr = `${day}-${month}-${year}`;
 
-                    // រកជំនួស Regex ទម្រង់ DD-MM-YYYY
                     updatedMessage = updatedMessage.replace(/\b\d{2}-\d{2}-\d{4}\b/g, newDateStr);
                 }
 
@@ -256,12 +249,10 @@ async function processPendingSchedules() {
                      WHERE id = $2`,
                     [updatedMessage, item.id]
                 );
-                console.log(`🔄 [Worker] Schedule ID ${item.id} ជាសារប្រចាំថ្ងៃ បានប្តូរទៅថ្ងៃស្អែក (${currentScheduledDate.toISOString()}) ដោយជោគជ័យ!`);
             } else {
                 await pool.query("UPDATE scheduled_messages SET status = 'Sent' WHERE id = $1", [item.id]);
             }
 
-            console.log(`✅ [Worker] ផ្ញើសារ Schedule ID ${item.id} ជោគជ័យ!`);
             successCount++;
         } catch (err) {
             console.error(`❌ [Worker Error] Schedule ID ${item.id}:`, err.message);
@@ -285,7 +276,7 @@ app.get('/api/run-cron', async (req, res) => {
     }
 });
 
-// ១០. API ផ្ញើសារភ្លាមៗ (គាំទ្ររូបភាពច្រើន req.files)
+// ១០. API ផ្ញើសារភ្លាមៗ
 app.post('/api/notify/send', upload.array('images', 10), async (req, res) => {
     const { channel, message, phoneNumber, userId } = req.body;
     const recipient = phoneNumber || userId || process.env.TELEGRAM_GROUP_CHAT_ID;
@@ -303,7 +294,7 @@ app.post('/api/notify/send', upload.array('images', 10), async (req, res) => {
     }
 });
 
-// ១១. API បង្កើតកាលវិភាគផ្ញើសារ (Create Schedule) - គាំទ្រ Daily Auto-Send
+// ១១. API បង្កើតកាលវិភាគផ្ញើសារ (Create Schedule)
 app.post('/api/notify/schedule', upload.array('images', 10), async (req, res) => {
     const { channel, message, scheduleTime, phoneNumber, userId, isDaily } = req.body;
     const recipient = phoneNumber || userId || process.env.TELEGRAM_GROUP_CHAT_ID;
@@ -340,10 +331,6 @@ app.post('/api/notify/schedule', upload.array('images', 10), async (req, res) =>
     }
 });
 
-// -------------------------------------------------------------
-// 🆕 មុខងារបន្ថែម៖ API សម្រាប់បង្កើត និង ទាញយកបញ្ជី Group ពី Database
-// -------------------------------------------------------------
-
 // ១២. API ទាញយកបញ្ជី Group ទាំងអស់
 app.get('/api/groups', async (req, res) => {
     try {
@@ -376,11 +363,7 @@ app.post('/api/groups', async (req, res) => {
     }
 });
 
-// -------------------------------------------------------------
-// មុខងារបន្ថែម៖ មើលបញ្ជី, កែប្រែ, និងលុប Schedule
-// -------------------------------------------------------------
-
-// ទាញយកបញ្ជីកាលវិភាគទាំងអស់ ព្រមទាំងឈ្មោះគ្រុប និងព័ត៌មាន is_daily
+// ១៤. API ទាញយកបញ្ជីកាលវិភាគទាំងអស់
 app.get('/api/schedules', async (req, res) => {
     try {
         const result = await pool.query(`
@@ -396,7 +379,7 @@ app.get('/api/schedules', async (req, res) => {
     }
 });
 
-// កែប្រែព័ត៌មានកាលវិភាគ (Update Schedule) - គាំទ្រ Daily Auto-Send
+// ១៥. API កែប្រែព័ត៌មានកាលវិភាគ
 app.put('/api/schedules/:id', upload.array('images', 10), async (req, res) => {
     const { id } = req.params;
     const { channel, message, scheduleTime, phoneNumber, userId, isDaily } = req.body;
@@ -432,7 +415,7 @@ app.put('/api/schedules/:id', upload.array('images', 10), async (req, res) => {
     }
 });
 
-// លុបកាលវិភាគ (Delete Schedule)
+// ១៦. API លុបកាលវិភាគ
 app.delete('/api/schedules/:id', async (req, res) => {
     const { id } = req.params;
     try {
@@ -443,7 +426,7 @@ app.delete('/api/schedules/:id', async (req, res) => {
     }
 });
 
-// API ទាញយក Logs
+// ១៧. API ទាញយក Logs
 app.get('/api/logs', async (req, res) => {
     try {
         const result = await pool.query('SELECT * FROM notification_logs ORDER BY created_at DESC LIMIT 50');

@@ -185,16 +185,15 @@ async function sendNotification(channel, recipient, message, imagesArray) {
         }
 
         // --- LINE ---
+       // --- LINE (បានកែសម្រួលឱ្យផ្ញើទៅ LINE Group ID ឬ User ID ច្រើនបាន) ---
         if (channel === 'line' || channel === 'broadcast') {
-            let targetLineId = recipient;
-            if (!targetLineId || (!targetLineId.startsWith('U') && !targetLineId.startsWith('C'))) {
-                targetLineId = process.env.LINE_USER_ID;
-            }
+            const rawTargets = recipient || process.env.LINE_USER_ID || '';
+            const targetLineIds = rawTargets.split(',').map(id => id.trim()).filter(id => id.length > 0);
             
             if (!lineClient) {
                 throw new Error('LINE Client មិនទាន់ត្រូវបានកំណត់ cấu hình!');
             }
-            if (!targetLineId) {
+            if (targetLineIds.length === 0) {
                 throw new Error('រកមិនឃើញ LINE Target ID (User ID ឬ Group ID) សម្រាប់ផ្ញើសារ!');
             }
 
@@ -202,13 +201,15 @@ async function sendNotification(channel, recipient, message, imagesArray) {
             if (message) messages.push({ type: 'text', text: message });
 
             if (messages.length > 0) {
-                try {
-                    await lineClient.pushMessage(targetLineId, messages);
-                    await saveLog('LINE', targetLineId, message || '[Photos]', 'Success');
-                    console.log(`✅ [LINE Success] បានផ្ញើសារទៅកាន់ Target ID: ${targetLineId}`);
-                } catch (lineApiErr) {
-                    console.error(`❌ [LINE API Error details]:`, lineApiErr.originalError?.response?.data || lineApiErr.message);
-                    throw new Error(`LINE API Failed: ${lineApiErr.message}`);
+                for (const targetId of targetLineIds) {
+                    try {
+                        await lineClient.pushMessage(targetId, messages);
+                        await saveLog('LINE', targetId, message || '[Photos]', 'Success');
+                        console.log(`✅ [LINE Success] បានផ្ញើសារទៅកាន់ Target ID: ${targetId}`);
+                    } catch (lineApiErr) {
+                        console.error(`❌ [LINE API Error details for ${targetId}]:`, lineApiErr.originalError?.response?.data || lineApiErr.message);
+                        await saveLog('LINE', targetId, message || '[Photos]', `Failed: ${lineApiErr.message}`);
+                    }
                 }
             }
         }

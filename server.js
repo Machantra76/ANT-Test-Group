@@ -97,45 +97,19 @@ if (telegramToken && !telegramToken.includes('YOUR_TELEGRAM')) {
     }
 }
 
-// ៥. WhatsApp Setup (បានកែសម្រួលដើម្បីការពារ Server Crash)
+// ៥. WhatsApp Setup
 let whatsappClient = null;
 try {
     whatsappClient = new Client({
         authStrategy: new LocalAuth(),
         puppeteer: {
             headless: true,
-            args: [
-                '--no-sandbox', 
-                '--disable-setuid-sandbox', 
-                '--disable-dev-shm-usage', 
-                '--disable-accelerated-2d-canvas',
-                '--no-first-run',
-                '--no-zygote',
-                '--disable-gpu'
-            ]
+            args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu']
         }
     });
-
-    whatsappClient.on('qr', (qr) => {
-        console.log('📱 [WhatsApp QR Code]: សូមស្កេន QR ខាងក្រោមនេះ៖');
-        qrcode.generate(qr, { small: true });
-    });
-
-    whatsappClient.on('ready', () => {
-        console.log('✅ [WhatsApp Client] រួចរាល់ និងតភ្ជាប់ជោគជ័យ!');
-    });
-
-    whatsappClient.on('auth_failure', (msg) => {
-        console.error('❌ [WhatsApp Auth Failure]:', msg);
-    });
-
-    whatsappClient.on('disconnected', (reason) => {
-        console.log('⚠️ [WhatsApp Disconnected]:', reason);
-    });
-
-    whatsappClient.initialize().catch(err => {
-        console.log('⚠️ [WhatsApp Warning]: មិនអាចបើកដំណើរการ WhatsApp Client បានទេ (អាចបណ្តាលមកពីខ្វះ Chrome លើ Server):', err.message);
-    });
+    whatsappClient.on('qr', (qr) => qrcode.generate(qr, { small: true }));
+    whatsappClient.on('ready', () => console.log('✅ [WhatsApp Client] រួចរាល់!'));
+    whatsappClient.initialize().catch(err => console.log('⚠️ [WhatsApp Warning]: គ្មាន Chrome លើ Server:', err.message));
 } catch (wErr) {
     console.log('⚠️ WhatsApp client skipped:', wErr.message);
 }
@@ -192,32 +166,26 @@ async function sendNotification(channel, recipient, message, imagesArray) {
             }
         }
 
-        // --- WhatsApp (បានកែសម្រួលបន្ថែមសុវត្ថិភាពការផ្ញើ) ---
+        // --- WhatsApp ---
         if (channel === 'whatsapp' || (channel === 'broadcast' && recipient)) {
-            if (!whatsappClient) {
-                throw new Error('WhatsApp client មិនទាន់ត្រូវបានបើកដំណើរការនៅលើ Server ទេ។');
-            }
-            
+            if (!whatsappClient) throw new Error('WhatsApp client មិនទាន់បើកដំណើរការ!');
             const cleanNumber = (recipient || '').replace(/[^0-9]/g, '');
-            if (!cleanNumber) {
-                throw new Error('លេខទូរស័ព្ទ WhatsApp មិនត្រឹមត្រូវ!');
+            if (cleanNumber) {
+                const formattedNumber = `${cleanNumber}@c.us`;
+                if (message) {
+                    await whatsappClient.sendMessage(formattedNumber, message);
+                }
+                for (const fileObj of tempFilePaths) {
+                    const fileBuffer = fs.readFileSync(fileObj.path);
+                    const media = new MessageMedia(fileObj.mimetype, fileBuffer.toString('base64'), 'image.jpg');
+                    await whatsappClient.sendMessage(formattedNumber, media);
+                }
+                await saveLog('WhatsApp', recipient, message || '[Photos]', 'Success');
             }
-
-            const formattedNumber = `${cleanNumber}@c.us`;
-            
-            if (message) {
-                await whatsappClient.sendMessage(formattedNumber, message);
-            }
-            for (const fileObj of tempFilePaths) {
-                const fileBuffer = fs.readFileSync(fileObj.path);
-                const media = new MessageMedia(fileObj.mimetype, fileBuffer.toString('base64'), 'image.jpg');
-                await whatsappClient.sendMessage(formattedNumber, media);
-            }
-            await saveLog('WhatsApp', recipient, message || '[Photos]', 'Success');
-            console.log(`✅ [WhatsApp Success] បានផ្ញើសារទៅកាន់: ${formattedNumber}`);
         }
 
         // --- LINE ---
+       // --- LINE (បានកែសម្រួលឱ្យផ្ញើទៅ LINE Group ID ឬ User ID ច្រើនបាន) ---
         if (channel === 'line' || channel === 'broadcast') {
             const rawTargets = recipient || process.env.LINE_USER_ID || '';
             const targetLineIds = rawTargets.split(',').map(id => id.trim()).filter(id => id.length > 0);
@@ -268,18 +236,22 @@ async function processPendingSchedules() {
         try {
             let imagesArray = item.images_data ? JSON.parse(item.images_data) : [];
             
+            // 🚀 ផ្ញើសារចេញ (សារត្រូវបានទាញតម្លៃស្របតាម schedule_time ស្រាប់ពី Frontend)
             await sendNotification(item.channel, item.recipient, item.message, imagesArray);
 
             if (item.is_daily) {
+                // 🔄 ប្រសិនបើជាសារប្រចាំថ្ងៃ ត្រូវបូកបន្ថែម ១ ថ្ងៃទៅឱ្យ "ម៉ោងផ្ញើ" សម្រាប់ថ្ងៃស្អែក
                 const currentScheduledDate = new Date(item.schedule_time);
                 currentScheduledDate.setDate(currentScheduledDate.getDate() + 1);
 
+                // បច្ចុប្បន្នភាព schedule_time ថ្មី និងរក្សា status ជា Pending ដើម្បីឱ្យវាដេញឡើងរាល់ថ្ងៃ
                 await pool.query(
                     `UPDATE scheduled_messages SET schedule_time = $1, status = 'Pending' WHERE id = $2`,
                     [currentScheduledDate.toISOString(), item.id]
                 );
                 console.log(`🔄 [Daily Schedule] បានអាប់ដេតម៉ោងផ្ញើសម្រាប់ថ្ងៃស្អែក៖ ${currentScheduledDate.toLocaleString()}`);
             } else {
+                // ប្រសិនបើជាសារផ្ញើតែម្តង ប្តូរ status ទៅជា Sent
                 await pool.query("UPDATE scheduled_messages SET status = 'Sent' WHERE id = $1", [item.id]);
             }
             successCount++;

@@ -36,6 +36,14 @@
             margin-bottom: 30px;
         }
 
+        /* 🌟 Modern Card for Group Creation */
+        .group-card {
+            background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+            border: 1px solid #cbd5e1;
+            border-left: 5px solid #3b82f6;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.03);
+        }
+
         h2, h3 { 
             text-align: center; 
             color: #0f172a; 
@@ -107,18 +115,36 @@
         /* Table Styling */
         .table-responsive { width: 100%; overflow-x: auto; }
         table { width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 14px; }
-        th, td { padding: 12px 10px; text-align: left; border-bottom: 1px solid #e2e8f0; }
+        th, td { padding: 14px 12px; text-align: left; border-bottom: 1px solid #e2e8f0; vertical-align: middle; }
         th { background-color: #f1f5f9; color: #334155; font-weight: 700; }
 
-        .badge { padding: 4px 8px; border-radius: 6px; font-size: 12px; font-weight: 600; }
+        .badge { padding: 5px 10px; border-radius: 6px; font-size: 12px; font-weight: 600; display: inline-block; }
         .badge-pending { background-color: #fef3c7; color: #d97706; }
         .badge-sent { background-color: #dcfce7; color: #15803d; }
         .badge-failed { background-color: #fee2e2; color: #b91c1c; }
         .badge-daily { background-color: #e0e7ff; color: #4338ca; }
 
-        .btn-action { padding: 6px 10px; font-size: 12px; border-radius: 6px; margin-right: 4px; }
-        .btn-edit { background-color: #f59e0b; color: white; }
-        .btn-delete { background-color: #ef4444; color: white; }
+        /* 🌟 Improved Table Action Buttons (Clean & Spaced) */
+        .action-cell {
+            display: flex;
+            align-items: center;
+            gap: 8px; /* បង្កើតគម្លាតដាច់ពីគ្នា */
+        }
+        .btn-action { 
+            padding: 8px 14px; 
+            font-size: 13px; 
+            font-weight: 600;
+            border-radius: 8px; 
+            border: none;
+            cursor: pointer;
+            color: white;
+            transition: all 0.2s;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        .btn-edit { background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); }
+        .btn-edit:hover { opacity: 0.9; transform: translateY(-1px); }
+        .btn-delete { background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%); }
+        .btn-delete:hover { opacity: 0.9; transform: translateY(-1px); }
 
         #alert { 
             margin-top: 20px; 
@@ -134,20 +160,26 @@
 </head>
 <body>
 
-<!-- 🆕 ប្រអប់សម្រាប់បន្ថែម Group ថ្មី -->
-<div class="container" style="background: #f8fafc; border: 1.5px dashed #cbd5e1;">
-    <h3>➕ បង្កើត Group ឬ Chat ID ថ្មី</h3>
-    <div class="form-group">
-        <label for="newGroupName">ឈ្មោះ Group (Group Name):</label>
-        <input type="text" id="newGroupName" placeholder="ឧ. គ្រុបផ្នែកលក់ (Sales)">
+<!-- 🌟 🆕 បញ្ចូលកាតបង្កើត Group ថ្មីឱ្យមើលទៅកាន់តែលុយនិងស្អាត -->
+<div class="container group-card">
+    <h3 style="color: #1e40af; display: flex; align-items: center; justify-content: center; gap: 8px;">
+        <span>✨</span> បង្កើត Group ឬ Chat ID ថ្មី
+    </h3>
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+        <div class="form-group" style="margin-bottom: 0;">
+            <label for="newGroupName">ឈ្មោះ Group (Group Name):</label>
+            <input type="text" id="newGroupName" placeholder="ឧ. គ្រុបផ្នែកលក់ (Sales)">
+        </div>
+        <div class="form-group" style="margin-bottom: 0;">
+            <label for="newGroupId">Chat ID ឬ លេខទូរស័ព្ទ:</label>
+            <input type="text" id="newGroupId" placeholder="ឧ. -100123456789">
+        </div>
     </div>
-    <div class="form-group">
-        <label for="newGroupId">Chat ID ឬ លេខទូរស័ព្ទ:</label>
-        <input type="text" id="newGroupId" placeholder="ឧ. -100123456789">
+    <div style="margin-top: 20px;">
+        <button type="button" class="btn-send" onclick="addNewGroup()" style="width: 100%; border-radius: 8px;">
+            💾 រក្សាទុក Group ថ្មី
+        </button>
     </div>
-    <button type="button" class="btn-send" onclick="addNewGroup()" style="width: 100%;">
-        💾 រក្សាទុក Group ថ្មី
-    </button>
 </div>
 
 <div class="container">
@@ -242,10 +274,9 @@
 <script>
     document.addEventListener('DOMContentLoaded', () => {
         loadSchedules();
-        loadGroups(); // ទាញយកបញ្ជី Group ពេលទំព័របើករួច
+        loadGroups(); 
     });
 
-    // 🆕 មុខងារបន្ថែម Group ថ្មីទៅកាន់ Database
     async function addNewGroup() {
         const name = document.getElementById('newGroupName').value.trim();
         const groupId = document.getElementById('newGroupId').value.trim();
@@ -267,7 +298,7 @@
                 showAlert(result.message, true);
                 document.getElementById('newGroupName').value = '';
                 document.getElementById('newGroupId').value = '';
-                loadGroups(); // Refresh បញ្ជី Dropdown ឡើងវិញស្វ័យប្រវត្តិ
+                loadGroups(); 
             } else {
                 showAlert('បរាជ័យ៖ ' + result.error, false);
             }
@@ -277,7 +308,6 @@
         }
     }
 
-    // 🆕 ទាញយកបញ្ជី Group ពី Database មកដាក់ក្នុង Dropdown
     async function loadGroups() {
         try {
             const res = await fetch('/api/groups');
@@ -299,7 +329,6 @@
         }
     }
 
-    // ពេលជ្រើសរើស Group វានឹងយក ID មកដាក់ក្នុងប្រអប់ phoneNumber ស្វ័យប្រវត្តិ
     function onGroupSelected() {
         const groupSelect = document.getElementById('groupSelect');
         const phoneNumberInput = document.getElementById('phoneNumber');
@@ -308,7 +337,6 @@
         }
     }
 
-    // 🆕 ទាញយកបញ្ជី Schedule មកបង្ហាញ (រួមទាំងឈ្មោះគ្រុប និងសញ្ញារស្វ័យប្រវត្តិរាល់ថ្ងៃ)
     async function loadSchedules() {
         try {
             const res = await fetch('/api/schedules');
@@ -326,12 +354,10 @@
                 if (item.status === 'Sent') badgeClass = 'badge-sent';
                 if (item.status.startsWith('Failed')) badgeClass = 'badge-failed';
 
-                // បង្ហាញឈ្មោះគ្រុប ប្រសិនបើមានក្នុង Database
                 const displayRecipient = item.group_name 
                     ? `<span style="color: #2563eb; font-weight: 600;">📁 ${item.group_name}</span><br><small style="color: #64748b;">(${item.recipient})</small>` 
                     : (item.recipient || 'N/A');
 
-                // 🔄 បង្ហាញ Badge ថែម បើជាសារផ្ញើប្រចាំថ្ងៃ
                 const dailyBadgeHtml = item.is_daily ? `<br><span class="badge badge-daily" style="margin-top:4px; display:inline-block;">🔄 ផ្ញើប្រចាំថ្ងៃ</span>` : '';
 
                 return `
@@ -342,10 +368,12 @@
                         <td>${dateStr}</td>
                         <td><span class="badge ${badgeClass}">${item.status}</span></td>
                         <td>
-                            ${item.status === 'Pending' ? `
-                                <button class="btn-action btn-edit" onclick="editSchedule(${JSON.stringify(item).replace(/"/g, '&quot;')})">កែរ</button>
-                            ` : ''}
-                            <button class="btn-action btn-delete" onclick="deleteSchedule(${item.id})">លុប</button>
+                            <div class="action-cell">
+                                ${item.status === 'Pending' ? `
+                                    <button class="btn-action btn-edit" onclick="editSchedule(${JSON.stringify(item).replace(/"/g, '&quot;')})">កែរ</button>
+                                ` : ''}
+                                <button class="btn-action btn-delete" onclick="deleteSchedule(${item.id})">លុប</button>
+                            </div>
                         </td>
                     </tr>
                 `;
@@ -355,7 +383,6 @@
         }
     }
 
-    // Handle Submit សម្រាប់ Schedule (បង្កើត ឬ កែប្រែ)
     function handleScheduleSubmit() {
         const editId = document.getElementById('editId').value;
         if (editId) {
@@ -365,7 +392,6 @@
         }
     }
 
-    // បញ្ជូន Form បង្កើតថ្មី
     async function submitForm(url) {
         const form = document.getElementById('notifyForm');
         const formData = new FormData(form);
@@ -391,7 +417,6 @@
         }
     }
 
-    // មុខងារទាញយកថ្ងៃខែពី scheduleTime មក Update ចូល Message ស្វ័យប្រវត្តិ
     document.getElementById('scheduleTime').addEventListener('change', function() {
         const scheduleVal = this.value; 
         if (!scheduleVal) return;
@@ -411,7 +436,6 @@
         messageBox.value = `សូមជម្រាបជូន ព័ត៌មានបើកគ្រុប​នឹងត្រូវផ្ញើនៅថ្ងៃ ${formattedDate}។`;
     });
 
-    // បញ្ជូន Form កែប្រែ (Update)
     async function submitUpdateForm(url) {
         const form = document.getElementById('notifyForm');
         const formData = new FormData(form);
@@ -432,7 +456,6 @@
         }
     }
 
-    // 🛠️ ដាក់ទិន្នន័យចូល Form ពេលចុចប៊ូតុង "កែរ" (កែប្រែទាញម៉ោង Local ត្រូវចំ ១០០%)
     function editSchedule(item) {
         document.getElementById('editId').value = item.id;
         document.getElementById('channel').value = item.channel;
@@ -460,7 +483,6 @@
         window.scrollTo({ top: 0, behavior: 'smooth' });
     }
 
-    // លុប Schedule
     async function deleteSchedule(id) {
         if (!confirm('តើអ្នកប្រាកដថាចង់លុបកាលវិភាគនេះមែនទេ?')) return;
 
@@ -478,7 +500,6 @@
         }
     }
 
-    // Reset Form មកធម្មតាវិញ
     function resetForm() {
         document.getElementById('notifyForm').reset();
         document.getElementById('editId').value = '';

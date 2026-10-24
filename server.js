@@ -5,8 +5,6 @@ const path = require('path');
 const multer = require('multer');
 const TelegramBot = require('node-telegram-bot-api');
 const line = require('@line/bot-sdk');
-const { Client, LocalAuth, MessageMedia } = require('whatsapp-web.js');
-const qrcode = require('qrcode-terminal');
 const { Pool } = require('pg');
 const fs = require('fs');
 
@@ -20,7 +18,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 const upload = multer({ storage: multer.memoryStorage() });
 
-// ១. ការតភ្ជាប់ Neon Database
+// ១. ការតភ្ជាប់ Neon Database[cite: 1, 2]
 const pool = new Pool({
     connectionString: process.env.DATABASE_URL,
     ssl: { rejectUnauthorized: false }
@@ -82,7 +80,7 @@ async function saveLog(channel, recipient, message, status) {
     }
 }
 
-// ៤. Telegram Bot Setup
+// ៤. Telegram Bot Setup[cite: 1, 2]
 const telegramToken = process.env.TELEGRAM_BOT_TOKEN;
 let telegramBot = null;
 if (telegramToken && !telegramToken.includes('YOUR_TELEGRAM')) {
@@ -97,24 +95,7 @@ if (telegramToken && !telegramToken.includes('YOUR_TELEGRAM')) {
     }
 }
 
-// ៥. WhatsApp Setup
-let whatsappClient = null;
-try {
-    whatsappClient = new Client({
-        authStrategy: new LocalAuth(),
-        puppeteer: {
-            headless: true,
-            args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu']
-        }
-    });
-    whatsappClient.on('qr', (qr) => qrcode.generate(qr, { small: true }));
-    whatsappClient.on('ready', () => console.log('✅ [WhatsApp Client] រួចរាល់!'));
-    whatsappClient.initialize().catch(err => console.log('⚠️ [WhatsApp Warning]: គ្មាន Chrome លើ Server:', err.message));
-} catch (wErr) {
-    console.log('⚠️ WhatsApp client skipped:', wErr.message);
-}
-
-// ៦. LINE Bot Setup
+// ៦. LINE Bot Setup[cite: 1, 2]
 const lineConfig = {
     channelAccessToken: process.env.LINE_CHANNEL_ACCESS_TOKEN || '',
     channelSecret: process.env.LINE_CHANNEL_SECRET || ''
@@ -123,7 +104,7 @@ const lineClient = (lineConfig.channelAccessToken && !lineConfig.channelAccessTo
     ? new line.Client(lineConfig)
     : null;
 
-// ៧. Core Function សម្រាប់បញ្ជូនសារ
+// ៧. Core Function សម្រាប់បញ្ជូនសារ (គាំទ្រ Telegram & LINE ច្រើន Target IDs)[cite: 1, 2, 4]
 async function sendNotification(channel, recipient, message, imagesArray) {
     let tempFilePaths = [];
     
@@ -141,7 +122,7 @@ async function sendNotification(channel, recipient, message, imagesArray) {
             }
         }
 
-        // --- Telegram ---
+        // --- Telegram (รองรับหลาย Chat ID คั่นด้วยเครื่องหมายจุลภาค)[cite: 4] ---
         if (channel === 'telegram' || channel === 'broadcast') {
             const rawTargets = recipient || process.env.TELEGRAM_GROUP_CHAT_ID || '';
             const targetIds = rawTargets.split(',').map(id => id.trim()).filter(id => id.length > 0);
@@ -166,26 +147,7 @@ async function sendNotification(channel, recipient, message, imagesArray) {
             }
         }
 
-        // --- WhatsApp ---
-        if (channel === 'whatsapp' || (channel === 'broadcast' && recipient)) {
-            if (!whatsappClient) throw new Error('WhatsApp client មិនទាន់បើកដំណើរការ!');
-            const cleanNumber = (recipient || '').replace(/[^0-9]/g, '');
-            if (cleanNumber) {
-                const formattedNumber = `${cleanNumber}@c.us`;
-                if (message) {
-                    await whatsappClient.sendMessage(formattedNumber, message);
-                }
-                for (const fileObj of tempFilePaths) {
-                    const fileBuffer = fs.readFileSync(fileObj.path);
-                    const media = new MessageMedia(fileObj.mimetype, fileBuffer.toString('base64'), 'image.jpg');
-                    await whatsappClient.sendMessage(formattedNumber, media);
-                }
-                await saveLog('WhatsApp', recipient, message || '[Photos]', 'Success');
-            }
-        }
-
-        // --- LINE ---
-       // --- LINE (បានកែសម្រួលឱ្យផ្ញើទៅ LINE Group ID ឬ User ID ច្រើនបាន) ---
+        // --- LINE (ផ្ញើទៅ LINE Group ID ឬ User ID ជាច្រើន)[cite: 4] ---
         if (channel === 'line' || channel === 'broadcast') {
             const rawTargets = recipient || process.env.LINE_USER_ID || '';
             const targetLineIds = rawTargets.split(',').map(id => id.trim()).filter(id => id.length > 0);
@@ -222,7 +184,7 @@ async function sendNotification(channel, recipient, message, imagesArray) {
     }
 }
 
-// ៨. Worker ឆែកសាររង់ចាំ (Cron Job Processing)
+// ៨. Worker ឆែកសាររង់ចាំ (Cron Job Processing) - អាប់ដេតថ្ងៃខែស្វ័យប្រវត្តិសម្រាប់សារប្រចាំថ្ងៃ[cite: 1, 2]
 async function processPendingSchedules() {
     const result = await pool.query(
         `SELECT * FROM scheduled_messages WHERE status = 'Pending' AND schedule_time <= NOW()`
@@ -235,23 +197,34 @@ async function processPendingSchedules() {
     for (const item of pendingTasks) {
         try {
             let imagesArray = item.images_data ? JSON.parse(item.images_data) : [];
+            let messageToSend = item.message || '';
+
+            // ប្រសិនបើជាសារប្រចាំថ្ងៃ (Daily) ត្រូវ Update ថ្ងៃខែក្នុងអត្ថបទសារឱ្យត្រូវនឹងថ្ងៃពិតប្រាកដនៃថ្ងៃផ្ញើ
+            if (item.is_daily) {
+                const scheduleDate = new Date(item.schedule_time);
+                const day = String(scheduleDate.getDate()).padStart(2, '0');
+                const month = String(scheduleDate.getMonth() + 1).padStart(2, '0');
+                const year = scheduleDate.getFullYear();
+                const hours = String(scheduleDate.getHours()).padStart(2, '0');
+                const minutes = String(scheduleDate.getMinutes()).padStart(2, '0');
+
+                const formattedDateStr = `${day}-${month}-${year} ម៉ោង ${hours}:${minutes}`;
+                messageToSend = messageToSend.replace(/\d{2}-\d{2}-\d{4} ម៉ោង \d{2}:\d{2}/g, formattedDateStr);
+            }
             
-            // 🚀 ផ្ញើសារចេញ (សារត្រូវបានទាញតម្លៃស្របតាម schedule_time ស្រាប់ពី Frontend)
-            await sendNotification(item.channel, item.recipient, item.message, imagesArray);
+            // 🚀 ផ្ញើសារចេញជាមួយអត្ថបទដែលបានកែសម្រួលថ្ងៃខែរួច
+            await sendNotification(item.channel, item.recipient, messageToSend, imagesArray);
 
             if (item.is_daily) {
-                // 🔄 ប្រសិនបើជាសារប្រចាំថ្ងៃ ត្រូវបូកបន្ថែម ១ ថ្ងៃទៅឱ្យ "ម៉ោងផ្ញើ" សម្រាប់ថ្ងៃស្អែក
                 const currentScheduledDate = new Date(item.schedule_time);
                 currentScheduledDate.setDate(currentScheduledDate.getDate() + 1);
 
-                // បច្ចុប្បន្នភាព schedule_time ថ្មី និងរក្សា status ជា Pending ដើម្បីឱ្យវាដេញឡើងរាល់ថ្ងៃ
                 await pool.query(
                     `UPDATE scheduled_messages SET schedule_time = $1, status = 'Pending' WHERE id = $2`,
                     [currentScheduledDate.toISOString(), item.id]
                 );
                 console.log(`🔄 [Daily Schedule] បានអាប់ដេតម៉ោងផ្ញើសម្រាប់ថ្ងៃស្អែក៖ ${currentScheduledDate.toLocaleString()}`);
             } else {
-                // ប្រសិនបើជាសារផ្ញើតែម្តង ប្តូរ status ទៅជា Sent
                 await pool.query("UPDATE scheduled_messages SET status = 'Sent' WHERE id = $1", [item.id]);
             }
             successCount++;
@@ -272,7 +245,7 @@ app.get('/api/run-cron', async (req, res) => {
     }
 });
 
-// ១០. API ផ្ញើសារភ្លាមៗ (Send Now)
+// ១០. API ផ្ញើសារភ្លាមៗ (Send Now)[cite: 1, 2]
 app.post('/api/notify/send', upload.array('images', 10), async (req, res) => {
     const { channel, message, phoneNumber, userId } = req.body;
     const recipient = phoneNumber || userId || process.env.TELEGRAM_GROUP_CHAT_ID;
@@ -291,7 +264,7 @@ app.post('/api/notify/send', upload.array('images', 10), async (req, res) => {
     }
 });
 
-// LINE Webhook Endpoint
+// LINE Webhook Endpoint[cite: 1, 2]
 app.post('/webhook', async (req, res) => {
     try {
         const events = req.body.events || [];

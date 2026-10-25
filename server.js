@@ -7,7 +7,7 @@ const TelegramBot = require('node-telegram-bot-api');
 const line = require('@line/bot-sdk');
 const { Pool } = require('pg');
 const fs = require('fs');
-const axios = require('axios'); // បន្ថែមសម្រាប់ช่วย Upload រូបភាពយក Link សម្រាប់ LINE[cite: 1]
+const axios = require('axios');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -19,7 +19,6 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 const upload = multer({ storage: multer.memoryStorage() });
 
-// ១. ការតភ្ជាប់ Neon Database[cite: 1]
 const pool = new Pool({
     connectionString: process.env.DATABASE_URL,
     ssl: { rejectUnauthorized: false }
@@ -81,32 +80,6 @@ async function saveLog(channel, recipient, message, status) {
     }
 }
 
-// មុខងារជំនួយ៖ Upload រូបភាពទៅកាន់ ImgBB ដើម្បីយក Public URL មកប្រើលើ LINE[cite: 1]
-async function uploadImageToHosting(buffer) {
-    try {
-        const axios = require('axios');
-        const FormData = require('form-data');
-        
-        const form = new FormData();
-        // បម្លែង Buffer ទៅជា base64 string ឱ្យបានត្រឹមត្រូវ
-        form.append('image', buffer.toString('base64'));
-
-        const apiKey = process.env.IMGBB_API_KEY;
-        const response = await axios.post(`https://api.imgbb.com/1/upload?key=${apiKey}`, form, {
-            headers: {
-                ...form.getHeaders()
-            }
-        });
-
-        if (response.data && response.data.success) {
-            console.log('✅ [ImgBB Success] Link:', response.data.data.url);
-            return response.data.data.url;
-        }
-    } catch (error) {
-        console.error('❌ [Image Upload Error Details]:', error.response?.data || error.message);
-    }
-    return null;
-}
 const cloudinary = require('cloudinary').v2;
 
 cloudinary.config({
@@ -133,7 +106,6 @@ async function uploadImageToHosting(buffer) {
     });
 }
 
-// ៤. Telegram Bot Setup[cite: 1]
 const telegramToken = process.env.TELEGRAM_BOT_TOKEN;
 let telegramBot = null;
 if (telegramToken && !telegramToken.includes('YOUR_TELEGRAM')) {
@@ -148,7 +120,6 @@ if (telegramToken && !telegramToken.includes('YOUR_TELEGRAM')) {
     }
 }
 
-// ៦. LINE Bot Setup[cite: 1]
 const lineConfig = {
     channelAccessToken: process.env.LINE_CHANNEL_ACCESS_TOKEN || '',
     channelSecret: process.env.LINE_CHANNEL_SECRET || ''
@@ -157,10 +128,8 @@ const lineClient = (lineConfig.channelAccessToken && !lineConfig.channelAccessTo
     ? new line.Client(lineConfig)
     : null;
 
-// ៧. Core Function សម្រាប់បញ្ជូនសារ (គាំទ្រ Telegram & LINE ច្រើន Target IDs ព្រមទាំងរូបភាព)[cite: 1]
 async function sendNotification(channel, recipient, message, imagesArray) {
     let tempFilePaths = [];
-    
     try {
         if (imagesArray && imagesArray.length > 0) {
             for (let i = 0; i < imagesArray.length; i++) {
@@ -175,7 +144,6 @@ async function sendNotification(channel, recipient, message, imagesArray) {
             }
         }
 
-        // --- Telegram (รองรับหลาย Chat ID คั่นด้วยเครื่องหมายจุลภาค) ---
         if (channel === 'telegram' || channel === 'broadcast') {
             const rawTargets = recipient || process.env.TELEGRAM_GROUP_CHAT_ID || '';
             const targetIds = rawTargets.split(',').map(id => id.trim()).filter(id => id.length > 0);
@@ -200,8 +168,6 @@ async function sendNotification(channel, recipient, message, imagesArray) {
             }
         }
 
-        // --- LINE (ផ្ញើទៅ LINE Group ID ឬ User ID ជាច្រើន រួមទាំងរូបភាព)[cite: 1] ---
-       // --- LINE (ផ្ញើទៅ LINE Group ID ឬ User ID ជាច្រើន រួមទាំងរូបភាព) ---
         if (channel === 'line' || channel === 'broadcast') {
             const rawTargets = recipient || process.env.LINE_USER_ID || '';
             const targetLineIds = rawTargets.split(',').map(id => id.trim()).filter(id => id.length > 0);
@@ -214,13 +180,10 @@ async function sendNotification(channel, recipient, message, imagesArray) {
             }
 
             const messages = [];
-            
-            // ១. 🌟 ដាក់អត្ថបទចូលទៅក្នុង LINE Messages មុនគេ (ដើម្បីឱ្យសារស្ថិតនៅខាងលើ)
             if (message) {
                 messages.push({ type: 'text', text: message });
             }
 
-            // ២. 🌟 ដាក់រូបភាពចូលទៅក្នុង LINE Messages បន្ទាប់មក (ដើម្បីឱ្យរូបភាពស្ថិតនៅខាងក្រោម)
             if (tempFilePaths.length > 0) {
                 for (const fileObj of tempFilePaths) {
                     const publicUrl = await uploadImageToHosting(fileObj.buffer);
@@ -256,7 +219,6 @@ async function sendNotification(channel, recipient, message, imagesArray) {
     }
 }
 
-// ៨. Worker ឆែកសាររង់ចាំ (Cron Job Processing)[cite: 1]
 async function processPendingSchedules() {
     const result = await pool.query(
         `SELECT * FROM scheduled_messages WHERE status = 'Pending' AND schedule_time <= NOW()`
@@ -315,7 +277,6 @@ app.get('/api/run-cron', async (req, res) => {
     }
 });
 
-// ១០. API ផ្ញើសារភ្លាមៗ (Send Now)[cite: 1]
 app.post('/api/notify/send', upload.array('images', 10), async (req, res) => {
     const { channel, message, phoneNumber, userId } = req.body;
     const recipient = phoneNumber || userId || process.env.TELEGRAM_GROUP_CHAT_ID;
@@ -334,7 +295,6 @@ app.post('/api/notify/send', upload.array('images', 10), async (req, res) => {
     }
 });
 
-// LINE Webhook Endpoint[cite: 1]
 app.post('/webhook', async (req, res) => {
     try {
         const events = req.body.events || [];
@@ -450,4 +410,3 @@ app.get('/api/logs', async (req, res) => {
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 
 app.listen(PORT, '0.0.0.0', () => console.log(`🚀 Server កំពុងរត់លើ http://localhost:${PORT}`));
-```[cite: 1]

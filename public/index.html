@@ -4,45 +4,163 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Notification Hub Dashboard</title>
+    <!-- Import Google Fonts: Kantumruy Pro & Inter -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Kantumruy+Pro:wght@400;500;600;700&display=swap" rel="stylesheet">
 
     <style>
-        * { box-sizing: border-box; font-family: 'Kantumruy Pro', 'Inter', sans-serif; }
-        body { background: linear-gradient(135deg, #f0f4f8 0%, #e2e8f0 100%); margin: 0; padding: 30px 15px; min-height: 100vh; display: flex; flex-direction: column; align-items: center; }
-        .container { width: 100%; max-width: 850px; background: #ffffff; padding: 35px 30px; border-radius: 16px; box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.08); border: 1px solid #e2e8f0; margin-bottom: 30px; }
-        .group-card { background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%); border: 1px solid #cbd5e1; border-left: 5px solid #3b82f6; }
-        h2, h3 { text-align: center; color: #0f172a; margin-top: 0; margin-bottom: 25px; font-weight: 700; }
+        * { 
+            box-sizing: border-box; 
+            font-family: 'Kantumruy Pro', 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; 
+        }
+        
+        body { 
+            background: linear-gradient(135deg, #f0f4f8 0%, #e2e8f0 100%); 
+            margin: 0; 
+            padding: 30px 15px; 
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .container { 
+            width: 100%;
+            max-width: 850px; 
+            background: #ffffff; 
+            padding: 35px 30px; 
+            border-radius: 16px; 
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.08); 
+            border: 1px solid #e2e8f0;
+            margin-bottom: 30px;
+        }
+
+        /* 🌟 Modern Card for Group Creation */
+        .group-card {
+            background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+            border: 1px solid #cbd5e1;
+            border-left: 5px solid #3b82f6;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.03);
+        }
+
+        h2, h3 { 
+            text-align: center; 
+            color: #0f172a; 
+            margin-top: 0;
+            margin-bottom: 25px; 
+            font-weight: 700;
+        }
+
         .form-group { margin-bottom: 20px; }
-        label { display: block; margin-bottom: 8px; font-weight: 600; color: #334155; font-size: 14px; }
-        select, input[type="text"], input[type="datetime-local"], textarea { width: 100%; padding: 12px 14px; border: 1.5px solid #cbd5e1; border-radius: 8px; font-size: 14px; color: #0f172a; background-color: #f8fafc; outline: none; }
-        select:focus, input:focus, textarea:focus { border-color: #3b82f6; background-color: #ffffff; box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.15); }
-        .btn-group { display: flex; gap: 12px; margin-top: 25px; }
-        button { flex: 1; padding: 14px; border: none; border-radius: 10px; font-size: 15px; font-weight: 700; cursor: pointer; color: #ffffff; transition: all 0.25s ease; display: inline-flex; align-items: center; justify-content: center; gap: 8px; }
+
+        label { 
+            display: block; 
+            margin-bottom: 8px; 
+            font-weight: 600; 
+            color: #334155; 
+            font-size: 14px;
+        }
+
+        select, input[type="text"], input[type="datetime-local"], textarea { 
+            width: 100%; 
+            padding: 12px 14px; 
+            border: 1.5px solid #cbd5e1; 
+            border-radius: 8px; 
+            font-size: 14px; 
+            color: #0f172a;
+            background-color: #f8fafc;
+            transition: all 0.2s ease-in-out;
+            outline: none;
+        }
+
+        select:focus, input:focus, textarea:focus {
+            border-color: #3b82f6;
+            background-color: #ffffff;
+            box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.15);
+        }
+
+        .btn-group { 
+            display: flex; 
+            gap: 12px; 
+            margin-top: 25px; 
+        }
+
+        button { 
+            flex: 1; 
+            padding: 14px; 
+            border: none; 
+            border-radius: 10px; 
+            font-size: 15px; 
+            font-weight: 700; 
+            cursor: pointer; 
+            color: #ffffff; 
+            transition: all 0.25s ease; 
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            text-shadow: 0 1px 2px rgba(0,0,0,0.1);
+        }
+
         .btn-send { background: linear-gradient(135deg, #10b981 0%, #059669 100%); box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3); }
+        .btn-send:hover { transform: translateY(-2px); }
+
         .btn-schedule { background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%); box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3); }
+        .btn-schedule:hover { transform: translateY(-2px); }
+
         .btn-cancel { background: #64748b; display: none; }
+        .btn-cancel:hover { background: #475569; }
+
+        /* Table Styling */
         .table-responsive { width: 100%; overflow-x: auto; }
         table { width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 14px; }
         th, td { padding: 14px 12px; text-align: left; border-bottom: 1px solid #e2e8f0; vertical-align: middle; }
         th { background-color: #f1f5f9; color: #334155; font-weight: 700; }
+
         .badge { padding: 5px 10px; border-radius: 6px; font-size: 12px; font-weight: 600; display: inline-block; }
         .badge-pending { background-color: #fef3c7; color: #d97706; }
         .badge-sent { background-color: #dcfce7; color: #15803d; }
         .badge-failed { background-color: #fee2e2; color: #b91c1c; }
         .badge-daily { background-color: #e0e7ff; color: #4338ca; }
-        .action-cell { display: flex; align-items: center; gap: 8px; }
-        .btn-action { padding: 8px 14px; font-size: 13px; font-weight: 600; border-radius: 8px; border: none; cursor: pointer; color: white; }
+
+        /* 🌟 Improved Table Action Buttons (Clean & Spaced) */
+        .action-cell {
+            display: flex;
+            align-items: center;
+            gap: 8px; /* បង្កើតគម្លាតដាច់ពីគ្នា */
+        }
+        .btn-action { 
+            padding: 8px 14px; 
+            font-size: 13px; 
+            font-weight: 600;
+            border-radius: 8px; 
+            border: none;
+            cursor: pointer;
+            color: white;
+            transition: all 0.2s;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
         .btn-edit { background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); }
+        .btn-edit:hover { opacity: 0.9; transform: translateY(-1px); }
         .btn-delete { background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%); }
-        #alert { margin-top: 20px; padding: 14px; border-radius: 8px; display: none; text-align: center; font-weight: 600; }
+        .btn-delete:hover { opacity: 0.9; transform: translateY(-1px); }
+
+        #alert { 
+            margin-top: 20px; 
+            padding: 14px; 
+            border-radius: 8px; 
+            display: none; 
+            text-align: center; 
+            font-weight: 600; 
+        }
         .alert-success { background-color: #dcfce7; color: #15803d; border: 1px solid #bbf7d0; }
         .alert-error { background-color: #fee2e2; color: #b91c1c; border: 1px solid #fecaca; }
     </style>
 </head>
 <body>
 
+<!-- 🌟 🆕 បញ្ចូលកាតបង្កើត Group ថ្មីឱ្យមើលទៅកាន់តែលុយនិងស្អាត -->
 <div class="container group-card">
     <h3 style="color: #1e40af; display: flex; align-items: center; justify-content: center; gap: 8px;">
         <span>✨</span> បង្កើត Group ឬ Chat ID ថ្មី
@@ -79,6 +197,7 @@
             </select>
         </div>
 
+        <!-- 🆕 Dropdown ជ្រើសរើស Group -->
         <div class="form-group">
             <label for="groupSelect">ជ្រើសរើសគ្រុប (Select Group):</label>
             <select id="groupSelect" name="groupSelect" onchange="onGroupSelected()">
@@ -96,7 +215,6 @@
             <textarea id="message" name="message" rows="4" placeholder="វាយអត្ថបទសារទីនេះ..."></textarea>
         </div>
 
-        <!-- 🌟 ត្រូវមានពាក្យ multiple ដើម្បីឱ្យជ្រើសរើសរូបភាពបានច្រើនសន្លឹក -->
         <div class="form-group">
             <label for="images">ភ្ជាប់រូបភាពជាច្រើន (Images - Optional):</label>
             <input type="file" id="images" name="images" accept="image/*" multiple>
@@ -107,6 +225,7 @@
             <input type="datetime-local" id="scheduleTime" name="scheduleTime">
         </div>
 
+        <!-- 🔄 Checkbox សម្រាប់ជ្រើសរើសផ្ញើស្វ័យប្រវត្តិរាល់ថ្ងៃ -->
         <div class="form-group" style="display: flex; align-items: center; gap: 10px; background: #f8fafc; padding: 12px; border-radius: 8px; border: 1.5px solid #cbd5e1;">
             <input type="checkbox" id="isDaily" name="isDaily" value="true" style="width: 20px; height: 20px; cursor: pointer;">
             <label for="isDaily" style="margin-bottom: 0; cursor: pointer; color: #0f172a; font-weight: 600;">
@@ -130,6 +249,7 @@
     <div id="alert"></div>
 </div>
 
+<!-- 📊 តារាងបង្ហាញបញ្ជីសារកំណត់ពេល -->
 <div class="container">
     <h3>បញ្ជីសារដែលបានកំណត់ពេល (Scheduled Messages)</h3>
     <div class="table-responsive">
@@ -160,21 +280,32 @@
     async function addNewGroup() {
         const name = document.getElementById('newGroupName').value.trim();
         const groupId = document.getElementById('newGroupId').value.trim();
-        if (!name || !groupId) { showAlert('សូមបំពេញឈ្មោះ Group និង Chat ID ឱ្យបានគ្រប់ជ្រុងជ្រោយ!', false); return; }
+
+        if (!name || !groupId) {
+            showAlert('សូមបំពេញឈ្មោះ Group និង Chat ID ឱ្យបានគ្រប់ជ្រុងជ្រោយ!', false);
+            return;
+        }
+
         try {
-            const res = await fetch('/api/groups', {
+            const response = await fetch('/api/groups', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ groupId, name })
             });
-            const result = await res.json();
+            const result = await response.json();
+
             if (result.success) {
                 showAlert(result.message, true);
                 document.getElementById('newGroupName').value = '';
                 document.getElementById('newGroupId').value = '';
                 loadGroups(); 
-            } else { showAlert('បរាជ័យ៖ ' + result.error, false); }
-        } catch (err) { showAlert('មានបញ្ហាក្នុងการតភ្ជាប់ទៅកាន់ Server!', false); }
+            } else {
+                showAlert('បរាជ័យ៖ ' + result.error, false);
+            }
+        } catch (err) {
+            console.error('Error:', err);
+            showAlert('មានបញ្ហាក្នុងការតភ្ជាប់ទៅកាន់ Server!', false);
+        }
     }
 
     async function loadGroups() {
@@ -182,20 +313,28 @@
             const res = await fetch('/api/groups');
             const data = await res.json();
             const groupSelect = document.getElementById('groupSelect');
+
             groupSelect.innerHTML = '<option value="">-- ជ្រើសរើសគ្រុប ឬបញ្ចូលដោយដៃខាងក្រោម --</option>';
-            if (data.success && data.groups) {
-                data.groups.forEach(g => {
-                    const opt = document.createElement('option');
-                    opt.value = g.id; opt.textContent = g.name;
-                    groupSelect.appendChild(opt);
+
+            if (data.success && data.groups && data.groups.length > 0) {
+                data.groups.forEach(group => {
+                    const option = document.createElement('option');
+                    option.value = group.id; 
+                    option.textContent = group.name;
+                    groupSelect.appendChild(option);
                 });
             }
-        } catch (err) { console.error(err); }
+        } catch (err) {
+            console.error('មិនអាចទាញយកបញ្ជី Group បានទេ:', err);
+        }
     }
 
     function onGroupSelected() {
         const groupSelect = document.getElementById('groupSelect');
-        if (groupSelect.value) document.getElementById('phoneNumber').value = groupSelect.value;
+        const phoneNumberInput = document.getElementById('phoneNumber');
+        if (groupSelect.value) {
+            phoneNumberInput.value = groupSelect.value;
+        }
     }
 
     async function loadSchedules() {
@@ -203,17 +342,24 @@
             const res = await fetch('/api/schedules');
             const data = await res.json();
             const tbody = document.getElementById('scheduleTableBody');
+
             if (!data.success || data.schedules.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;">គ្មានសារកំណត់ពេលនៅឡើយទេ[cite: 3]</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;">គ្មានសារកំណត់ពេលនៅឡើយទេ</td></tr>';
                 return;
             }
+
             tbody.innerHTML = data.schedules.map(item => {
                 const dateStr = new Date(item.schedule_time).toLocaleString('km-KH');
                 let badgeClass = 'badge-pending';
                 if (item.status === 'Sent') badgeClass = 'badge-sent';
                 if (item.status.startsWith('Failed')) badgeClass = 'badge-failed';
-                const displayRecipient = item.group_name ? `<span style="color: #2563eb; font-weight: 600;">📁 ${item.group_name}</span><br><small style="color: #64748b;">(${item.recipient})</small>` : (item.recipient || 'N/A');
+
+                const displayRecipient = item.group_name 
+                    ? `<span style="color: #2563eb; font-weight: 600;">📁 ${item.group_name}</span><br><small style="color: #64748b;">(${item.recipient})</small>` 
+                    : (item.recipient || 'N/A');
+
                 const dailyBadgeHtml = item.is_daily ? `<br><span class="badge badge-daily" style="margin-top:4px; display:inline-block;">🔄 ផ្ញើប្រចាំថ្ងៃ</span>` : '';
+
                 return `
                     <tr>
                         <td><strong>${item.channel.toUpperCase()}</strong>${dailyBadgeHtml}</td>
@@ -223,46 +369,91 @@
                         <td><span class="badge ${badgeClass}">${item.status}</span></td>
                         <td>
                             <div class="action-cell">
-                                ${item.status === 'Pending' ? `<button class="btn-action btn-edit" onclick='editSchedule(${JSON.stringify(item)})'>កែរ</button>` : ''}
+                                ${item.status === 'Pending' ? `
+                                    <button class="btn-action btn-edit" onclick="editSchedule(${JSON.stringify(item).replace(/"/g, '&quot;')})">កែរ</button>
+                                ` : ''}
                                 <button class="btn-action btn-delete" onclick="deleteSchedule(${item.id})">លុប</button>
                             </div>
                         </td>
                     </tr>
                 `;
             }).join('');
-        } catch (err) { console.error(err); }
+        } catch (err) {
+            console.error(err);
+        }
     }
 
     function handleScheduleSubmit() {
         const editId = document.getElementById('editId').value;
-        if (editId) submitUpdateForm(`/api/schedules/${editId}`);
-        else submitForm('/api/notify/schedule');
+        if (editId) {
+            submitUpdateForm(`/api/schedules/${editId}`);
+        } else {
+            submitForm('/api/notify/schedule');
+        }
     }
 
     async function submitForm(url) {
         const form = document.getElementById('notifyForm');
         const formData = new FormData(form);
+
         if (url.includes('schedule') && !document.getElementById('scheduleTime').value) {
             showAlert('សូមជ្រើសរើសម៉ោងសម្រាប់ការកំណត់ពេល (Schedule)!', false);
             return;
         }
+
         try {
-            const res = await fetch(url, { method: 'POST', body: formData });
-            const result = await res.json();
-            if (result.success) { showAlert(result.message, true); resetForm(); loadSchedules(); }
-            else { showAlert('បរាជ័យ៖ ' + result.error, false); }
-        } catch (err) { showAlert('មានបញ្ហាក្នុងការតភ្ជាប់ទៅកាន់ Server!', false); }
+            const response = await fetch(url, { method: 'POST', body: formData });
+            const result = await response.json();
+
+            if (result.success) {
+                showAlert(result.message, true);
+                resetForm();
+                loadSchedules();
+            } else {
+                showAlert('បរាជ័យ៖ ' + result.error, false);
+            }
+        } catch (err) {
+            showAlert('មានបញ្ហាក្នុងការតភ្ជាប់ទៅកាន់ Server!', false);
+        }
     }
+
+    document.getElementById('scheduleTime').addEventListener('change', function() {
+        const scheduleVal = this.value; 
+        if (!scheduleVal) return;
+
+        const dateObj = new Date(scheduleVal);
+        
+        const day = String(dateObj.getDate()).padStart(2, '0');
+        const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+        const year = dateObj.getFullYear();
+        
+        const hours = String(dateObj.getHours()).padStart(2, '0');
+        const minutes = String(dateObj.getMinutes()).padStart(2, '0');
+
+        const formattedDate = `${day}-${month}-${year} ម៉ោង ${hours}:${minutes}`;
+
+        const messageBox = document.getElementById('message');
+        messageBox.value = `សូមជម្រាបជូន ព័ត៌មានបើកគ្រុប​នឹងត្រូវផ្ញើនៅថ្ងៃ ${formattedDate}។`;
+    });
 
     async function submitUpdateForm(url) {
         const form = document.getElementById('notifyForm');
         const formData = new FormData(form);
+
         try {
-            const res = await fetch(url, { method: 'PUT', body: formData });
-            const result = await res.json();
-            if (result.success) { showAlert(result.message, true); resetForm(); loadSchedules(); }
-            else { showAlert('បរាជ័យ៖ ' + result.error, false); }
-        } catch (err) { showAlert('មានបញ្ហាក្នុងការតភ្ជាប់ទៅកាន់ Server!', false); }
+            const response = await fetch(url, { method: 'PUT', body: formData });
+            const result = await response.json();
+
+            if (result.success) {
+                showAlert(result.message, true);
+                resetForm();
+                loadSchedules();
+            } else {
+                showAlert('បរាជ័យ៖ ' + result.error, false);
+            }
+        } catch (err) {
+            showAlert('មានបញ្ហាក្នុងការតភ្ជាប់ទៅកាន់ Server!', false);
+        }
     }
 
     function editSchedule(item) {
@@ -272,25 +463,41 @@
         document.getElementById('groupSelect').value = item.recipient || '';
         document.getElementById('message').value = item.message || '';
         document.getElementById('isDaily').checked = item.is_daily || false;
+        
         if (item.schedule_time) {
             const d = new Date(item.schedule_time);
-            document.getElementById('scheduleTime').value = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}T${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+            const year = d.getFullYear();
+            const month = String(d.getMonth() + 1).padStart(2, '0');
+            const day = String(d.getDate()).padStart(2, '0');
+            const hours = String(d.getHours()).padStart(2, '0');
+            const minutes = String(d.getMinutes()).padStart(2, '0');
+            
+            document.getElementById('scheduleTime').value = `${year}-${month}-${day}T${hours}:${minutes}`;
         }
+
         document.getElementById('formTitle').textContent = 'កែប្រែកាលវិភាគផ្ញើសារ';
         document.getElementById('btnSend').style.display = 'none';
         document.getElementById('btnSchedule').textContent = '💾 រក្សាទុកការកែប្រែ';
         document.getElementById('btnCancel').style.display = 'inline-flex';
+
         window.scrollTo({ top: 0, behavior: 'smooth' });
     }
 
     async function deleteSchedule(id) {
         if (!confirm('តើអ្នកប្រាកដថាចង់លុបកាលវិភាគនេះមែនទេ?')) return;
+
         try {
             const res = await fetch(`/api/schedules/${id}`, { method: 'DELETE' });
             const result = await res.json();
-            if (result.success) { showAlert(result.message, true); loadSchedules(); }
-            else { showAlert('បរាជ័យ៖ ' + result.error, false); }
-        } catch (err) { showAlert('មិនអាចលុបបានទេ!', false); }
+            if (result.success) {
+                showAlert(result.message, true);
+                loadSchedules();
+            } else {
+                showAlert('បរាជ័យ៖ ' + result.error, false);
+            }
+        } catch (err) {
+            showAlert('មិនអាចលុបបានទេ!', false);
+        }
     }
 
     function resetForm() {
@@ -310,5 +517,6 @@
         alertDiv.textContent = msg;
     }
 </script>
+
 </body>
 </html>

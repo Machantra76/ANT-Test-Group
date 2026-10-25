@@ -7,8 +7,7 @@ const TelegramBot = require('node-telegram-bot-api');
 const line = require('@line/bot-sdk');
 const { Pool } = require('pg');
 const fs = require('fs');
-const axios = require('axios');
-const cloudinary = require('cloudinary').v2;
+const axios = require('axios'); // បន្ថែមសម្រាប់ช่วย Upload រូបភាពយក Link សម្រាប់ LINE[cite: 1]
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -82,7 +81,34 @@ async function saveLog(channel, recipient, message, status) {
     }
 }
 
-// កំណត់រចនាសម្ព័ន្ធ Cloudinary សម្រាប់ Upload រូបភាពយក Public URL មកប្រើលើ LINE[cite: 1]
+// មុខងារជំនួយ៖ Upload រូបភាពទៅកាន់ ImgBB ដើម្បីយក Public URL មកប្រើលើ LINE[cite: 1]
+async function uploadImageToHosting(buffer) {
+    try {
+        const axios = require('axios');
+        const FormData = require('form-data');
+        
+        const form = new FormData();
+        // បម្លែង Buffer ទៅជា base64 string ឱ្យបានត្រឹមត្រូវ
+        form.append('image', buffer.toString('base64'));
+
+        const apiKey = process.env.IMGBB_API_KEY;
+        const response = await axios.post(`https://api.imgbb.com/1/upload?key=${apiKey}`, form, {
+            headers: {
+                ...form.getHeaders()
+            }
+        });
+
+        if (response.data && response.data.success) {
+            console.log('✅ [ImgBB Success] Link:', response.data.data.url);
+            return response.data.data.url;
+        }
+    } catch (error) {
+        console.error('❌ [Image Upload Error Details]:', error.response?.data || error.message);
+    }
+    return null;
+}
+const cloudinary = require('cloudinary').v2;
+
 cloudinary.config({
     cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
     api_key: process.env.CLOUDINARY_API_KEY,
@@ -149,7 +175,7 @@ async function sendNotification(channel, recipient, message, imagesArray) {
             }
         }
 
-        // --- Telegram ---
+        // --- Telegram (รองรับหลาย Chat ID คั่นด้วยเครื่องหมายจุลภาค) ---
         if (channel === 'telegram' || channel === 'broadcast') {
             const rawTargets = recipient || process.env.TELEGRAM_GROUP_CHAT_ID || '';
             const targetIds = rawTargets.split(',').map(id => id.trim()).filter(id => id.length > 0);
@@ -157,22 +183,13 @@ async function sendNotification(channel, recipient, message, imagesArray) {
             if (telegramBot && targetIds.length > 0) {
                 for (const targetId of targetIds) {
                     try {
-                        if (tempFilePaths.length > 1) {
-                            const media = tempFilePaths.map((fileObj, index) => ({
-                                type: 'photo',
-                                media: fs.createReadStream(fileObj.path),
-                                caption: (index === 0 && message) ? message : undefined,
-                                parse_mode: (index === 0 && message) ? 'HTML' : undefined
-                            }));
-                            await telegramBot.sendMediaGroup(targetId, media);
-                        } else if (tempFilePaths.length === 1) {
-                            if (message) {
-                                await telegramBot.sendPhoto(targetId, tempFilePaths[0].path, { caption: message, parse_mode: 'HTML' });
-                            } else {
-                                await telegramBot.sendPhoto(targetId, tempFilePaths[0].path);
-                            }
-                        } else if (message) {
+                        if (message) {
                             await telegramBot.sendMessage(targetId, message, { parse_mode: 'HTML' });
+                        }
+                        if (tempFilePaths.length > 0) {
+                            for (const fileObj of tempFilePaths) {
+                                await telegramBot.sendPhoto(targetId, fileObj.path);
+                            }
                         }
                         await saveLog('Telegram', targetId, message || '[Photos]', 'Success');
                     } catch (singleErr) {
@@ -183,13 +200,14 @@ async function sendNotification(channel, recipient, message, imagesArray) {
             }
         }
 
-        // --- LINE ---
+        // --- LINE (ផ្ញើទៅ LINE Group ID ឬ User ID ជាច្រើន រួមទាំងរូបភាព)[cite: 1] ---
+       // --- LINE (ផ្ញើទៅ LINE Group ID ឬ User ID ជាច្រើន រួមទាំងរូបភាព) ---
         if (channel === 'line' || channel === 'broadcast') {
             const rawTargets = recipient || process.env.LINE_USER_ID || '';
             const targetLineIds = rawTargets.split(',').map(id => id.trim()).filter(id => id.length > 0);
             
             if (!lineClient) {
-                throw new Error('LINE Client មិនទាន់ត្រូវបានកំណត់ configuration!');
+                throw new Error('LINE Client មិនទាន់ត្រូវបានកំណត់ cấu hình!');
             }
             if (targetLineIds.length === 0) {
                 throw new Error('រកមិនឃើញ LINE Target ID (User ID ឬ Group ID) សម្រាប់ផ្ញើសារ!');
@@ -197,10 +215,12 @@ async function sendNotification(channel, recipient, message, imagesArray) {
 
             const messages = [];
             
+            // ១. 🌟 ដាក់អត្ថបទចូលទៅក្នុង LINE Messages មុនគេ (ដើម្បីឱ្យសារស្ថិតនៅខាងលើ)
             if (message) {
                 messages.push({ type: 'text', text: message });
             }
 
+            // ២. 🌟 ដាក់រូបភាពចូលទៅក្នុង LINE Messages បន្ទាប់មក (ដើម្បីឱ្យរូបភាពស្ថិតនៅខាងក្រោម)
             if (tempFilePaths.length > 0) {
                 for (const fileObj of tempFilePaths) {
                     const publicUrl = await uploadImageToHosting(fileObj.buffer);
@@ -236,7 +256,7 @@ async function sendNotification(channel, recipient, message, imagesArray) {
     }
 }
 
-// ៨. Worker ឆែកសាររង់ចាំ (Cron Job Processing) - ប្តូរថ្ងៃខែស្វ័យប្រវត្តិក្នុងអត្ថបទនិង Database[cite: 1, 3]
+// ៨. Worker ឆែកសាររង់ចាំ (Cron Job Processing)[cite: 1]
 async function processPendingSchedules() {
     const result = await pool.query(
         `SELECT * FROM scheduled_messages WHERE status = 'Pending' AND schedule_time <= NOW()`
@@ -251,8 +271,8 @@ async function processPendingSchedules() {
             let imagesArray = item.images_data ? JSON.parse(item.images_data) : [];
             let messageToSend = item.message || '';
 
-            // 🌟 យក schedule_time មកបង្កើតជាទម្រង់ថ្ងៃខែថ្មី (ឧ. 26-10-2026)[cite: 1, 3]
-            const scheduleDate = new Date(item.schedule_time);
+            // 🌟 កែប្រែត្រង់នេះ៖ មិនថា is_daily ឬអត់ទេ ឱ្យវាទាញយកកាលបរិច្ឆេទពិតប្រាកដពេលដែលសារត្រូវផ្ញើ (Current Time ឬ schedule_time) មកជំនួសក្នុងអត្ថបទសារ
+            const scheduleDate = new Date(); // ឬប្រើ schedule_time តាមការចង់បាន
             const day = String(scheduleDate.getDate()).padStart(2, '0');
             const month = String(scheduleDate.getMonth() + 1).padStart(2, '0');
             const year = scheduleDate.getFullYear();
@@ -261,12 +281,8 @@ async function processPendingSchedules() {
 
             const formattedDateStr = `${day}-${month}-${year} ម៉ោង ${hours}:${minutes}`;
             
-            // 🔍 ស្វែងរកនិងជំនួសថ្ងៃខែចាស់ក្នុងអត្ថបទសារឱ្យទៅជាថ្ងៃខែថ្មី[cite: 1, 3]
-            if (messageToSend.match(/\d{2}-\d{2}-\d{4}/)) {
-                messageToSend = messageToSend.replace(/\d{2}-\d{2}-\d{4}(?: ម៉ោង \d{2}:\d{2})?/g, formattedDateStr);
-            } else {
-                messageToSend += `\n(ថ្ងៃទី៖ ${formattedDateStr})`;
-            }
+            // ធ្វើការ Replace ទម្រង់ថ្ងៃខែចាស់ (DD-MM-YYYY ម៉ោង HH:MM) ក្នុងអត្ថបទសារ ឱ្យទៅជាថ្ងៃខែបច្ចុប្បន្នស្វ័យប្រវត្តិ
+            messageToSend = messageToSend.replace(/\d{2}-\d{2}-\d{4} ម៉ោង \d{2}:\d{2}/g, formattedDateStr);
             
             await sendNotification(item.channel, item.recipient, messageToSend, imagesArray);
 
@@ -274,12 +290,11 @@ async function processPendingSchedules() {
                 const currentScheduledDate = new Date(item.schedule_time);
                 currentScheduledDate.setDate(currentScheduledDate.getDate() + 1);
 
-                // 🌟 Update ទាំង schedule_time និង message ថ្មីចូល Database សម្រាប់ថ្ងៃបន្ទាប់[cite: 1, 3]
                 await pool.query(
-                    `UPDATE scheduled_messages SET schedule_time = $1, message = $2, status = 'Pending' WHERE id = $3`,
-                    [currentScheduledDate.toISOString(), messageToSend, item.id]
+                    `UPDATE scheduled_messages SET schedule_time = $1, status = 'Pending' WHERE id = $2`,
+                    [currentScheduledDate.toISOString(), item.id]
                 );
-                console.log(`🔄 [Daily Schedule Success] បានប្តូរថ្ងៃ និងអត្ថបទទៅថ្ងៃស្អែក៖ ${currentScheduledDate.toLocaleString()}`);
+                console.log(`🔄 [Daily Schedule] បានអាប់ដេតម៉ោងផ្ញើសម្រាប់ថ្ងៃស្អែក៖ ${currentScheduledDate.toLocaleString()}`);
             } else {
                 await pool.query("UPDATE scheduled_messages SET status = 'Sent' WHERE id = $1", [item.id]);
             }
@@ -291,7 +306,10 @@ async function processPendingSchedules() {
     }
     return { count: pendingTasks.length, success: successCount };
 }
+```[cite: 1]
 
+### សេចក្តីសន្និដ្ឋាន៖
+ការកែប្រែខាងលើនឹងធ្វើឱ្យកម្មវិធីរបស់អ្នកស្វែងរកទម្រង់ថ្ងៃខែ (Regex) នៅក្នុងអត្ថបទសារ ហើយជំនួសវាដោយថ្ងៃខែម៉ោងបច្ចុប្បន្ន (`26-10-2026`) មុនពេលបញ្ជូនទៅកាន់ Telegram ឬ LINE ជារៀងរាល់ដង[cite: 1]。
 app.get('/api/run-cron', async (req, res) => {
     try {
         const result = await processPendingSchedules();
@@ -301,7 +319,7 @@ app.get('/api/run-cron', async (req, res) => {
     }
 });
 
-// ១០. API ផ្ញើសារភ្លាមៗ (Send Now)[cite: 1, 2]
+// ១០. API ផ្ញើសារភ្លាមៗ (Send Now)[cite: 1]
 app.post('/api/notify/send', upload.array('images', 10), async (req, res) => {
     const { channel, message, phoneNumber, userId } = req.body;
     const recipient = phoneNumber || userId || process.env.TELEGRAM_GROUP_CHAT_ID;
@@ -320,7 +338,7 @@ app.post('/api/notify/send', upload.array('images', 10), async (req, res) => {
     }
 });
 
-// LINE Webhook Endpoint[cite: 1, 2]
+// LINE Webhook Endpoint[cite: 1]
 app.post('/webhook', async (req, res) => {
     try {
         const events = req.body.events || [];

@@ -201,6 +201,7 @@ async function sendNotification(channel, recipient, message, imagesArray) {
         }
 
         // --- LINE (ផ្ញើទៅ LINE Group ID ឬ User ID ជាច្រើន រួមទាំងរូបភាព)[cite: 1] ---
+       // --- LINE (ផ្ញើទៅ LINE Group ID ឬ User ID ជាច្រើន រួមទាំងរូបភាព) ---
         if (channel === 'line' || channel === 'broadcast') {
             const rawTargets = recipient || process.env.LINE_USER_ID || '';
             const targetLineIds = rawTargets.split(',').map(id => id.trim()).filter(id => id.length > 0);
@@ -214,7 +215,12 @@ async function sendNotification(channel, recipient, message, imagesArray) {
 
             const messages = [];
             
-            // បន្ថែមរូបភាពទៅក្នុង LINE Messages (ប្រសិនបើมี)[cite: 1]
+            // ១. 🌟 ដាក់អត្ថបទចូលទៅក្នុង LINE Messages មុនគេ (ដើម្បីឱ្យសារស្ថិតនៅខាងលើ)
+            if (message) {
+                messages.push({ type: 'text', text: message });
+            }
+
+            // ២. 🌟 ដាក់រូបភាពចូលទៅក្នុង LINE Messages បន្ទាប់មក (ដើម្បីឱ្យរូបភាពស្ថិតនៅខាងក្រោម)
             if (tempFilePaths.length > 0) {
                 for (const fileObj of tempFilePaths) {
                     const publicUrl = await uploadImageToHosting(fileObj.buffer);
@@ -226,11 +232,6 @@ async function sendNotification(channel, recipient, message, imagesArray) {
                         });
                     }
                 }
-            }
-
-            // បន្ថែមអត្ថបទទៅក្នុង LINE Messages (ប្រសិនបើมี)[cite: 1]
-            if (message) {
-                messages.push({ type: 'text', text: message });
             }
 
             if (messages.length > 0) {

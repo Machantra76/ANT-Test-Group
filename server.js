@@ -149,7 +149,7 @@ async function sendNotification(channel, recipient, message, imagesArray) {
             }
         }
 
-        // --- Telegram (รองรับหลาย Chat ID คั่นด้วยเครื่องหมายจุลภาค) ---
+        // --- Telegram ---
         if (channel === 'telegram' || channel === 'broadcast') {
             const rawTargets = recipient || process.env.TELEGRAM_GROUP_CHAT_ID || '';
             const targetIds = rawTargets.split(',').map(id => id.trim()).filter(id => id.length > 0);
@@ -157,7 +157,6 @@ async function sendNotification(channel, recipient, message, imagesArray) {
             if (telegramBot && targetIds.length > 0) {
                 for (const targetId of targetIds) {
                     try {
-                        // ប្រសិនបើមានរូបភាពច្រើនជាង ១ អាចផ្ញើជា Album (Media Group) ជាមួយ Caption នៅរូបទី១
                         if (tempFilePaths.length > 1) {
                             const media = tempFilePaths.map((fileObj, index) => ({
                                 type: 'photo',
@@ -184,7 +183,7 @@ async function sendNotification(channel, recipient, message, imagesArray) {
             }
         }
 
-        // --- LINE (ផ្ញើទៅ LINE Group ID ឬ User ID ជាច្រើន រួមទាំងរូបភាព) ---
+        // --- LINE ---
         if (channel === 'line' || channel === 'broadcast') {
             const rawTargets = recipient || process.env.LINE_USER_ID || '';
             const targetLineIds = rawTargets.split(',').map(id => id.trim()).filter(id => id.length > 0);
@@ -237,7 +236,7 @@ async function sendNotification(channel, recipient, message, imagesArray) {
     }
 }
 
-// ៨. Worker ឆែកសាររង់ចាំ (Cron Job Processing) - អាប់ដេតថ្ងៃខែស្វ័យប្រវត្តិ[cite: 1]
+// ៨. Worker ឆែកសាររង់ចាំ (Cron Job Processing) - កែសម្រួលថ្មីដើម្បីដូរថ្ងៃខែក្នុងអត្ថបទនិង Database ផ្ទាល់
 async function processPendingSchedules() {
     const result = await pool.query(
         `SELECT * FROM scheduled_messages WHERE status = 'Pending' AND schedule_time <= NOW()`
@@ -252,18 +251,20 @@ async function processPendingSchedules() {
             let imagesArray = item.images_data ? JSON.parse(item.images_data) : [];
             let messageToSend = item.message || '';
 
-            if (item.is_daily) {
-                const scheduleDate = new Date(item.schedule_time);
-                const day = String(scheduleDate.getDate()).padStart(2, '0');
-                const month = String(scheduleDate.getMonth() + 1).padStart(2, '0');
-                const year = scheduleDate.getFullYear();
-                const hours = String(scheduleDate.getHours()).padStart(2, '0');
-                const minutes = String(scheduleDate.getMinutes()).padStart(2, '0');
+            const scheduleDate = new Date(item.schedule_time);
+            const day = String(scheduleDate.getDate()).padStart(2, '0');
+            const month = String(scheduleDate.getMonth() + 1).padStart(2, '0');
+            const year = scheduleDate.getFullYear();
+            const hours = String(scheduleDate.getHours()).padStart(2, '0');
+            const minutes = String(scheduleDate.getMinutes()).padStart(2, '0');
 
-                const formattedDateStr = `${day}-${month}-${year} ម៉ោង ${hours}:${minutes}`;
-                
-                // 🔍 ប្តូរទម្រង់ថ្ងៃខែចាស់ក្នុងអត្ថបទឱ្យទៅជាថ្ងៃខែថ្មីតាមកាលវិភាគពិតប្រាកដ
-                messageToSend = messageToSend.replace(/\d{2}-\d{2}-\d{4} ម៉ោង \d{2}:\d{2}/g, formattedDateStr);
+            const formattedDateStr = `${day}-${month}-${year} ម៉ោង ${hours}:${minutes}`;
+            
+            // 🔍 ប្តូរទម្រង់ថ្ងៃខែចាស់ក្នុងអត្ថបទឱ្យទៅជាថ្ងៃខែថ្មីតាម schedule_time ជាក់ស្តែង
+            if (messageToSend.match(/\d{2}-\d{2}-\d{4}/)) {
+                messageToSend = messageToSend.replace(/\d{2}-\d{2}-\d{4}(?: ម៉ោង \d{2}:\d{2})?/g, formattedDateStr);
+            } else {
+                messageToSend += `\n(ថ្ងៃទី៖ ${formattedDateStr})`;
             }
             
             await sendNotification(item.channel, item.recipient, messageToSend, imagesArray);
@@ -272,11 +273,12 @@ async function processPendingSchedules() {
                 const currentScheduledDate = new Date(item.schedule_time);
                 currentScheduledDate.setDate(currentScheduledDate.getDate() + 1);
 
+                // 🌟 Update ទាំង schedule_time និង message ថ្មីចូល Database សម្រាប់ថ្ងៃស្អែក
                 await pool.query(
-                    `UPDATE scheduled_messages SET schedule_time = $1, status = 'Pending' WHERE id = $2`,
-                    [currentScheduledDate.toISOString(), item.id]
+                    `UPDATE scheduled_messages SET schedule_time = $1, message = $2, status = 'Pending' WHERE id = $3`,
+                    [currentScheduledDate.toISOString(), messageToSend, item.id]
                 );
-                console.log(`🔄 [Daily Schedule] បានអាប់ដេតម៉ោងផ្ញើសម្រាប់ថ្ងៃស្អែក៖ ${currentScheduledDate.toLocaleString()}`);
+                console.log(`🔄 [Daily Schedule Success] បានប្តូរថ្ងៃ និងអត្ថបទទៅថ្ងៃស្អែក៖ ${currentScheduledDate.toLocaleString()}`);
             } else {
                 await pool.query("UPDATE scheduled_messages SET status = 'Sent' WHERE id = $1", [item.id]);
             }

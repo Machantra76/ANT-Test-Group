@@ -84,20 +84,26 @@ async function saveLog(channel, recipient, message, status) {
 // មុខងារជំនួយ៖ Upload រូបភាពទៅកាន់ ImgBB ដើម្បីយក Public URL មកប្រើលើ LINE[cite: 1]
 async function uploadImageToHosting(buffer) {
     try {
+        const axios = require('axios');
         const FormData = require('form-data');
+        
         const form = new FormData();
+        // បម្លែង Buffer ទៅជា base64 string ឱ្យបានត្រឹមត្រូវ
         form.append('image', buffer.toString('base64'));
 
-        // ប្រើប្រាស់ IMGBB_API_KEY ពី .env (ប្រសិនបើไม่มี អ្នកអាចប្តូរไปใช้ Cloudinary ឬ Storage ផ្សេង)
-        const apiKey = process.env.IMGBB_API_KEY || '1b444b0292cd4d978a3c8646b9a8cf07'; // Key សាកល្បង ឬដាក់ផ្ទាល់ខ្លួន
+        const apiKey = process.env.IMGBB_API_KEY;
         const response = await axios.post(`https://api.imgbb.com/1/upload?key=${apiKey}`, form, {
-            headers: form.getHeaders()
+            headers: {
+                ...form.getHeaders()
+            }
         });
+
         if (response.data && response.data.success) {
+            console.log('✅ [ImgBB Success] Link:', response.data.data.url);
             return response.data.data.url;
         }
     } catch (error) {
-        console.error('❌ [Image Upload Error]:', error.message);
+        console.error('❌ [Image Upload Error Details]:', error.response?.data || error.message);
     }
     return null;
 }

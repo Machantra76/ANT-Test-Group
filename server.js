@@ -7,6 +7,7 @@ const TelegramBot = require('node-telegram-bot-api');
 const line = require('@line/bot-sdk');
 const { Pool } = require('pg');
 const fs = require('fs');
+const axios = require('axios'); // បន្ថែមសម្រាប់ช่วย Upload រូបភាពយក Link សម្រាប់ LINE[cite: 1]
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -16,23 +17,9 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
 
-// បង្កើតថត uploads ប្រសិនបើមិនទាន់มี
-const uploadsDir = path.join(__dirname, 'public', 'uploads');
-if (!fs.existsSync(uploadsDir)) {
-    fs.mkdirSync(uploadsDir, { recursive: true });
-}
+const upload = multer({ storage: multer.memoryStorage() });
 
-// កំណត់ Multer ឱ្យរក្សាទុករូបភាពដាក់ក្នុង public/uploads
-const storage = multer.diskStorage({
-    destination: (req, file, cb) => { cb(null, uploadsDir); },
-    filename: (req, file, cb) => {
-        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-        cb(null, uniqueSuffix + path.extname(file.originalname));
-    }
-});
-const upload = multer({ storage: storage });
-
-// ការតភ្ជាប់ Neon Database[cite: 1, 2]
+// ១. ការតភ្ជាប់ Neon Database[cite: 1]
 const pool = new Pool({
     connectionString: process.env.DATABASE_URL,
     ssl: { rejectUnauthorized: false }
@@ -94,20 +81,43 @@ async function saveLog(channel, recipient, message, status) {
     }
 }
 
-// Telegram Bot Setup[cite: 1, 2]
+// មុខងារជំនួយ៖ Upload រូបភាពទៅកាន់ ImgBB ដើម្បីយក Public URL មកប្រើលើ LINE[cite: 1]
+async function uploadImageToHosting(buffer) {
+    try {
+        const FormData = require('form-data');
+        const form = new FormData();
+        form.append('image', buffer.toString('base64'));
+
+        // ប្រើប្រាស់ IMGBB_API_KEY ពី .env (ប្រសិនបើไม่มี អ្នកអាចប្តូរไปใช้ Cloudinary ឬ Storage ផ្សេង)
+        const apiKey = process.env.IMGBB_API_KEY || '1b444b0292cd4d978a3c8646b9a8cf07'; // Key សាកល្បង ឬដាក់ផ្ទាល់ខ្លួន
+        const response = await axios.post(`https://api.imgbb.com/1/upload?key=${apiKey}`, form, {
+            headers: form.getHeaders()
+        });
+        if (response.data && response.data.success) {
+            return response.data.data.url;
+        }
+    } catch (error) {
+        console.error('❌ [Image Upload Error]:', error.message);
+    }
+    return null;
+}
+
+// ៤. Telegram Bot Setup[cite: 1]
 const telegramToken = process.env.TELEGRAM_BOT_TOKEN;
 let telegramBot = null;
 if (telegramToken && !telegramToken.includes('YOUR_TELEGRAM')) {
     try {
         telegramBot = new TelegramBot(telegramToken, { polling: true });
-        telegramBot.on('polling_error', (error) => { console.log(`⚠️ Telegram Polling Warning:`, error.code); });
+        telegramBot.on('polling_error', (error) => {
+            console.log(`⚠️ Telegram Polling Warning:`, error.code);
+        });
         console.log('✅ [Telegram Bot] តភ្ជាប់ជោគជ័យ!');
     } catch (err) {
         console.error('❌ [Telegram Setup Error]:', err.message);
     }
 }
 
-// LINE Bot Setup[cite: 1, 2]
+// ៦. LINE Bot Setup[cite: 1]
 const lineConfig = {
     channelAccessToken: process.env.LINE_CHANNEL_ACCESS_TOKEN || '',
     channelSecret: process.env.LINE_CHANNEL_SECRET || ''
@@ -116,10 +126,25 @@ const lineClient = (lineConfig.channelAccessToken && !lineConfig.channelAccessTo
     ? new line.Client(lineConfig)
     : null;
 
-// Core Function សម្រាប់បញ្ជូនសារ (Telegram Media Group & LINE Images/Text)[cite: 1, 2]
-async function sendNotification(channel, recipient, message, imagesArray, baseUrl = '') {
+// ៧. Core Function សម្រាប់បញ្ជូនសារ (គាំទ្រ Telegram & LINE ច្រើន Target IDs ព្រមទាំងរូបភាព)[cite: 1]
+async function sendNotification(channel, recipient, message, imagesArray) {
+    let tempFilePaths = [];
+    
     try {
-        // --- Telegram (គាំទ្រការផ្ញើរូបភាពច្រើនសន្លឹកជា Media Group / Album) ---
+        if (imagesArray && imagesArray.length > 0) {
+            for (let i = 0; i < imagesArray.length; i++) {
+                const imgObj = imagesArray[i];
+                const buffer = imgObj.buffer?.type === 'Buffer' ? Buffer.from(imgObj.buffer.data) : (imgObj.buffer || imgObj);
+                const mimetype = imgObj.mimetype || 'image/jpeg';
+                const ext = mimetype.split('/')[1] || 'jpg';
+                
+                const tempFilePath = path.join(__dirname, `temp_${Date.now()}_${i}.${ext}`);
+                fs.writeFileSync(tempFilePath, buffer);
+                tempFilePaths.push({ path: tempFilePath, mimetype, buffer });
+            }
+        }
+
+        // --- Telegram (รองรับหลาย Chat ID คั่นด้วยเครื่องหมายจุลภาค) ---
         if (channel === 'telegram' || channel === 'broadcast') {
             const rawTargets = recipient || process.env.TELEGRAM_GROUP_CHAT_ID || '';
             const targetIds = rawTargets.split(',').map(id => id.trim()).filter(id => id.length > 0);
@@ -127,24 +152,13 @@ async function sendNotification(channel, recipient, message, imagesArray, baseUr
             if (telegramBot && targetIds.length > 0) {
                 for (const targetId of targetIds) {
                     try {
-                        const filePaths = imagesArray ? imagesArray.map(img => path.join(__dirname, 'public', 'uploads', img.filename)).filter(p => fs.existsSync(p)) : [];
-
-                        if (filePaths.length > 1) {
-                            const media = filePaths.map((filePath, index) => ({
-                                type: 'photo',
-                                media: fs.createReadStream(filePath),
-                                caption: (index === 0 && message) ? message : undefined,
-                                parse_mode: (index === 0 && message) ? 'HTML' : undefined
-                            }));
-                            await telegramBot.sendMediaGroup(targetId, media);
-                        } else if (filePaths.length === 1) {
-                            if (message) {
-                                await telegramBot.sendPhoto(targetId, filePaths[0], { caption: message, parse_mode: 'HTML' });
-                            } else {
-                                await telegramBot.sendPhoto(targetId, filePaths[0]);
-                            }
-                        } else if (message) {
+                        if (message) {
                             await telegramBot.sendMessage(targetId, message, { parse_mode: 'HTML' });
+                        }
+                        if (tempFilePaths.length > 0) {
+                            for (const fileObj of tempFilePaths) {
+                                await telegramBot.sendPhoto(targetId, fileObj.path);
+                            }
                         }
                         await saveLog('Telegram', targetId, message || '[Photos]', 'Success');
                     } catch (singleErr) {
@@ -155,26 +169,37 @@ async function sendNotification(channel, recipient, message, imagesArray, baseUr
             }
         }
 
-        // --- LINE (គាំទ្រការផ្ញើសារអត្ថបទ និងរូបភាពតាម Public URL) ---
+        // --- LINE (ផ្ញើទៅ LINE Group ID ឬ User ID ជាច្រើន រួមទាំងរូបភាព)[cite: 1] ---
         if (channel === 'line' || channel === 'broadcast') {
             const rawTargets = recipient || process.env.LINE_USER_ID || '';
             const targetLineIds = rawTargets.split(',').map(id => id.trim()).filter(id => id.length > 0);
             
-            if (!lineClient) throw new Error('LINE Client មិនទាន់ត្រូវបានកំណត់ configuration!');
-            if (targetLineIds.length === 0) throw new Error('រកមិនឃើញ LINE Target ID!');
+            if (!lineClient) {
+                throw new Error('LINE Client មិនទាន់ត្រូវបានកំណត់ cấu hình!');
+            }
+            if (targetLineIds.length === 0) {
+                throw new Error('រកមិនឃើញ LINE Target ID (User ID ឬ Group ID) សម្រាប់ផ្ញើសារ!');
+            }
 
             const messages = [];
-            if (message) messages.push({ type: 'text', text: message });
+            
+            // បន្ថែមរូបភាពទៅក្នុង LINE Messages (ប្រសិនបើมี)[cite: 1]
+            if (tempFilePaths.length > 0) {
+                for (const fileObj of tempFilePaths) {
+                    const publicUrl = await uploadImageToHosting(fileObj.buffer);
+                    if (publicUrl) {
+                        messages.push({
+                            type: 'image',
+                            originalContentUrl: publicUrl,
+                            previewImageUrl: publicUrl
+                        });
+                    }
+                }
+            }
 
-            if (imagesArray && imagesArray.length > 0) {
-                imagesArray.forEach(img => {
-                    const imageUrl = img.url || `${baseUrl}/uploads/${img.filename}`;
-                    messages.push({
-                        type: 'image',
-                        originalContentUrl: imageUrl,
-                        previewImageUrl: imageUrl
-                    });
-                });
+            // បន្ថែមអត្ថបទទៅក្នុង LINE Messages (ប្រសិនបើมี)[cite: 1]
+            if (message) {
+                messages.push({ type: 'text', text: message });
             }
 
             if (messages.length > 0) {
@@ -182,19 +207,24 @@ async function sendNotification(channel, recipient, message, imagesArray, baseUr
                     try {
                         await lineClient.pushMessage(targetId, messages);
                         await saveLog('LINE', targetId, message || '[Photos]', 'Success');
+                        console.log(`✅ [LINE Success] បានផ្ញើសារនិងរូបភាពទៅកាន់ Target ID: ${targetId}`);
                     } catch (lineApiErr) {
-                        console.error(`❌ [LINE API Error for ${targetId}]:`, lineApiErr.originalError?.response?.data || lineApiErr.message);
+                        console.error(`❌ [LINE API Error details for ${targetId}]:`, lineApiErr.originalError?.response?.data || lineApiErr.message);
                         await saveLog('LINE', targetId, message || '[Photos]', `Failed: ${lineApiErr.message}`);
                     }
                 }
             }
         }
-    } catch (err) {
-        console.error('❌ [SendNotification Error]:', err.message);
+    } finally {
+        for (const fileObj of tempFilePaths) {
+            if (fs.existsSync(fileObj.path)) {
+                fs.unlinkSync(fileObj.path);
+            }
+        }
     }
 }
 
-// Worker ឆែកសាររង់ចាំ (Cron Job Processing)[cite: 1, 2]
+// ៨. Worker ឆែកសាររង់ចាំ (Cron Job Processing)[cite: 1]
 async function processPendingSchedules() {
     const result = await pool.query(
         `SELECT * FROM scheduled_messages WHERE status = 'Pending' AND schedule_time <= NOW()`
@@ -216,20 +246,22 @@ async function processPendingSchedules() {
                 const year = scheduleDate.getFullYear();
                 const hours = String(scheduleDate.getHours()).padStart(2, '0');
                 const minutes = String(scheduleDate.getMinutes()).padStart(2, '0');
+
                 const formattedDateStr = `${day}-${month}-${year} ម៉ោង ${hours}:${minutes}`;
                 messageToSend = messageToSend.replace(/\d{2}-\d{2}-\d{4} ម៉ោង \d{2}:\d{2}/g, formattedDateStr);
             }
             
-            const baseUrl = process.env.BASE_URL || 'https://your-app.onrender.com';
-            await sendNotification(item.channel, item.recipient, messageToSend, imagesArray, baseUrl);
+            await sendNotification(item.channel, item.recipient, messageToSend, imagesArray);
 
             if (item.is_daily) {
                 const currentScheduledDate = new Date(item.schedule_time);
                 currentScheduledDate.setDate(currentScheduledDate.getDate() + 1);
+
                 await pool.query(
                     `UPDATE scheduled_messages SET schedule_time = $1, status = 'Pending' WHERE id = $2`,
                     [currentScheduledDate.toISOString(), item.id]
                 );
+                console.log(`🔄 [Daily Schedule] បានអាប់ដេតម៉ោងផ្ញើសម្រាប់ថ្ងៃស្អែក៖ ${currentScheduledDate.toLocaleString()}`);
             } else {
                 await pool.query("UPDATE scheduled_messages SET status = 'Sent' WHERE id = $1", [item.id]);
             }
@@ -251,19 +283,18 @@ app.get('/api/run-cron', async (req, res) => {
     }
 });
 
-// API ផ្ញើសារភ្លាមៗ (Send Now)[cite: 1, 2]
+// ១០. API ផ្ញើសារភ្លាមៗ (Send Now)[cite: 1]
 app.post('/api/notify/send', upload.array('images', 10), async (req, res) => {
     const { channel, message, phoneNumber, userId } = req.body;
     const recipient = phoneNumber || userId || process.env.TELEGRAM_GROUP_CHAT_ID;
-    const baseUrl = `${req.protocol}://${req.get('host')}`;
 
     try {
         const imagesArray = req.files ? req.files.map(file => ({
-            filename: file.filename,
-            url: `${baseUrl}/uploads/${file.filename}`
+            buffer: file.buffer,
+            mimetype: file.mimetype
         })) : [];
 
-        await sendNotification(channel, recipient, message, imagesArray, baseUrl);
+        await sendNotification(channel, recipient, message, imagesArray);
         res.json({ success: true, message: 'បានបញ្ជូនសារនិងរូបភាពដោយជោគជ័យ!' });
     } catch (err) {
         console.error('❌ [API Send Error]:', err.message);
@@ -271,18 +302,24 @@ app.post('/api/notify/send', upload.array('images', 10), async (req, res) => {
     }
 });
 
-// LINE Webhook Endpoint[cite: 1, 2]
+// LINE Webhook Endpoint[cite: 1]
 app.post('/webhook', async (req, res) => {
     try {
         const events = req.body.events || [];
         for (const event of events) {
             if (event.source) {
-                if (event.source.groupId) console.log(`🎯 [LINE GROUP ID]: ${event.source.groupId}`);
-                if (event.source.userId) console.log(`👤 [LINE User ID]: ${event.source.userId}`);
+                console.log(`📌 [LINE Webhook Source Type]: ${event.source.type}`);
+                if (event.source.groupId) {
+                    console.log(`🎯 [LINE GROUP ID រកឃើញ]: ${event.source.groupId}`);
+                }
+                if (event.source.userId) {
+                    console.log(`👤 [LINE User ID]: ${event.source.userId}`);
+                }
             }
         }
         res.status(200).json({ success: true });
     } catch (err) {
+        console.error('❌ [Webhook Error]:', err);
         res.status(200).json({ success: false });
     }
 });
@@ -291,15 +328,14 @@ app.post('/api/notify/schedule', upload.array('images', 10), async (req, res) =>
     const { channel, message, scheduleTime, phoneNumber, userId, isDaily } = req.body;
     const recipient = phoneNumber || userId || process.env.TELEGRAM_GROUP_CHAT_ID;
     const isDailyBool = isDaily === 'true' || isDaily === true;
-    const baseUrl = `${req.protocol}://${req.get('host')}`;
 
     if (!scheduleTime) return res.status(400).json({ success: false, error: 'សូមកំណត់ពេលវេលាឱ្យបានត្រឹមត្រូវ!' });
 
     try {
         const targetDate = new Date(scheduleTime + '+07:00');
         const imagesArray = req.files ? req.files.map(file => ({
-            filename: file.filename,
-            url: `${baseUrl}/uploads/${file.filename}`
+            buffer: file.buffer,
+            mimetype: file.mimetype
         })) : [];
 
         await pool.query(

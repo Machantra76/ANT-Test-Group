@@ -1,4 +1,6 @@
 require('dotenv').config();
+const { Client: WhatsAppClient, LocalAuth } = require('whatsapp-web.js');
+const qrcode = require('qrcode-terminal');
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
@@ -18,6 +20,25 @@ app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
 
 const upload = multer({ storage: multer.memoryStorage() });
+// --- WhatsApp Bot Setup ---
+const whatsappClient = new WhatsAppClient({
+    authStrategy: new LocalAuth()
+});
+
+whatsappClient.on('qr', (qr) => {
+    console.log('📌 [WhatsApp] សូមស្កេន QR Code ខាងក្រោមนี้ ដើម្បីតភ្ជាប់ WhatsApp:');
+    qrcode.generate(qr, { small: true });
+});
+
+whatsappClient.on('ready', () => {
+    console.log('✅ [WhatsApp Bot] តភ្ជាប់ និងរួចរាល់សម្រាប់ការใช้งาน!');
+});
+
+whatsappClient.on('auth_failure', (msg) => {
+    console.error('❌ [WhatsApp Auth Failure]:', msg);
+});
+
+whatsappClient.initialize();
 
 // ១. ការតភ្ជាប់ Neon Database[cite: 1]
 const pool = new Pool({
@@ -80,6 +101,43 @@ async function saveLog(channel, recipient, message, status) {
         console.error('❌ [Log Save Error]:', err.message);
     }
 }
+// --- WhatsApp (ផ្ញើសារនិងរូបភាពទៅកាន់ WhatsApp Number ឬ Group) ---
+        if (channel === 'whatsapp' || channel === 'broadcast') {
+            const rawTargets = recipient || process.env.WHATSAPP_PHONE_NUMBER || '';
+            const targetPhoneNumbers = rawTargets.split(',').map(id => id.trim()).filter(id => id.length > 0);
+
+            if (targetPhoneNumbers.length > 0) {
+                for (let phoneNumber of targetPhoneNumbers) {
+                    try {
+                        // កែទម្រង់เบอร์โทรศัพท์ឱ្យត្រូវតាមស្ដង់ដារ WhatsApp (ឧ. ដាក់លេខកូដប្រទេស 855...)
+                        let formattedId = phoneNumber.includes('@c.us') || phoneNumber.includes('@g.us') 
+                            ? phoneNumber 
+                            : `${phoneNumber.replace(/[^0-9]/g, '')}@c.us`;
+
+                        // ១. ផ្ញើរូបភាពមុន ឬផ្ញើជាមួយ Caption (ប្រសិនបើមានរូបភាព)
+                        if (tempFilePaths.length > 0) {
+                            const { MessageMedia } = require('whatsapp-web.js');
+                            for (let i = 0; i < tempFilePaths.length; i++) {
+                                const fileObj = tempFilePaths[i];
+                                const media = MessageMedia.fromFilePath(fileObj.path);
+                                // បញ្ជូនអត្ថបទទៅជាមួយរូបភាពទី១ ប្រសិនបើមាន
+                                const captionText = (i === 0 && message) ? message : '';
+                                await whatsappClient.sendMessage(formattedId, media, { caption: captionText });
+                            }
+                        } else if (message) {
+                            // ២. បើគ្មានរូបភាព គឺផ្ញើត្រឹមអត្ថបទសុទ្ធ
+                            await whatsappClient.sendMessage(formattedId, message);
+                        }
+
+                        await saveLog('WhatsApp', phoneNumber, message || '[Photos]', 'Success');
+                        console.log(`✅ [WhatsApp Success] បានបញ្ជូនទៅកាន់៖ ${phoneNumber}`);
+                    } catch (waErr) {
+                        console.error(`❌ [WhatsApp Error for ${phoneNumber}]:`, waErr.message);
+                        await saveLog('WhatsApp', phoneNumber, message || '[Photos]', `Failed: ${waErr.message}`);
+                    }
+                }
+            }
+        }
 
 // មុខងារជំនួយ៖ Upload រូបភាពទៅកាន់ ImgBB ដើម្បីយក Public URL មកប្រើលើ LINE[cite: 1]
 async function uploadImageToHosting(buffer) {

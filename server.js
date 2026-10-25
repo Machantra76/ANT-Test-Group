@@ -107,6 +107,31 @@ async function uploadImageToHosting(buffer) {
     }
     return null;
 }
+const cloudinary = require('cloudinary').v2;
+
+cloudinary.config({
+    cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+    api_key: process.env.CLOUDINARY_API_KEY,
+    api_secret: process.env.CLOUDINARY_API_SECRET
+});
+
+async function uploadImageToHosting(buffer) {
+    return new Promise((resolve, reject) => {
+        const uploadStream = cloudinary.uploader.upload_stream(
+            { folder: 'notification_hub' },
+            (error, result) => {
+                if (error) {
+                    console.error('❌ [Cloudinary Upload Error]:', error.message);
+                    resolve(null);
+                } else {
+                    console.log('✅ [Cloudinary Success] URL:', result.secure_url);
+                    resolve(result.secure_url);
+                }
+            }
+        );
+        uploadStream.end(buffer);
+    });
+}
 
 // ៤. Telegram Bot Setup[cite: 1]
 const telegramToken = process.env.TELEGRAM_BOT_TOKEN;

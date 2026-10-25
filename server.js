@@ -7,7 +7,8 @@ const TelegramBot = require('node-telegram-bot-api');
 const line = require('@line/bot-sdk');
 const { Pool } = require('pg');
 const fs = require('fs');
-const axios = require('axios'); // បន្ថែមសម្រាប់ช่วย Upload រូបភាពយក Link សម្រាប់ LINE[cite: 1]
+const axios = require('axios');
+const cloudinary = require('cloudinary').v2;
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -81,34 +82,7 @@ async function saveLog(channel, recipient, message, status) {
     }
 }
 
-// មុខងារជំនួយ៖ Upload រូបភាពទៅកាន់ ImgBB ដើម្បីយក Public URL មកប្រើលើ LINE[cite: 1]
-async function uploadImageToHosting(buffer) {
-    try {
-        const axios = require('axios');
-        const FormData = require('form-data');
-        
-        const form = new FormData();
-        // បម្លែង Buffer ទៅជា base64 string ឱ្យបានត្រឹមត្រូវ
-        form.append('image', buffer.toString('base64'));
-
-        const apiKey = process.env.IMGBB_API_KEY;
-        const response = await axios.post(`https://api.imgbb.com/1/upload?key=${apiKey}`, form, {
-            headers: {
-                ...form.getHeaders()
-            }
-        });
-
-        if (response.data && response.data.success) {
-            console.log('✅ [ImgBB Success] Link:', response.data.data.url);
-            return response.data.data.url;
-        }
-    } catch (error) {
-        console.error('❌ [Image Upload Error Details]:', error.response?.data || error.message);
-    }
-    return null;
-}
-const cloudinary = require('cloudinary').v2;
-
+// កំណត់រចនាសម្ព័ន្ធ Cloudinary សម្រាប់ Upload រូបភាពយក Public URL មកប្រើលើ LINE[cite: 1]
 cloudinary.config({
     cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
     api_key: process.env.CLOUDINARY_API_KEY,
@@ -183,13 +157,23 @@ async function sendNotification(channel, recipient, message, imagesArray) {
             if (telegramBot && targetIds.length > 0) {
                 for (const targetId of targetIds) {
                     try {
-                        if (message) {
-                            await telegramBot.sendMessage(targetId, message, { parse_mode: 'HTML' });
-                        }
-                        if (tempFilePaths.length > 0) {
-                            for (const fileObj of tempFilePaths) {
-                                await telegramBot.sendPhoto(targetId, fileObj.path);
+                        // ប្រសិនបើមានរូបភាពច្រើនជាង ១ អាចផ្ញើជា Album (Media Group) ជាមួយ Caption នៅរូបទី១
+                        if (tempFilePaths.length > 1) {
+                            const media = tempFilePaths.map((fileObj, index) => ({
+                                type: 'photo',
+                                media: fs.createReadStream(fileObj.path),
+                                caption: (index === 0 && message) ? message : undefined,
+                                parse_mode: (index === 0 && message) ? 'HTML' : undefined
+                            }));
+                            await telegramBot.sendMediaGroup(targetId, media);
+                        } else if (tempFilePaths.length === 1) {
+                            if (message) {
+                                await telegramBot.sendPhoto(targetId, tempFilePaths[0].path, { caption: message, parse_mode: 'HTML' });
+                            } else {
+                                await telegramBot.sendPhoto(targetId, tempFilePaths[0].path);
                             }
+                        } else if (message) {
+                            await telegramBot.sendMessage(targetId, message, { parse_mode: 'HTML' });
                         }
                         await saveLog('Telegram', targetId, message || '[Photos]', 'Success');
                     } catch (singleErr) {
@@ -200,14 +184,13 @@ async function sendNotification(channel, recipient, message, imagesArray) {
             }
         }
 
-        // --- LINE (ផ្ញើទៅ LINE Group ID ឬ User ID ជាច្រើន រួមទាំងរូបភាព)[cite: 1] ---
-       // --- LINE (ផ្ញើទៅ LINE Group ID ឬ User ID ជាច្រើន រួមទាំងរូបភាព) ---
+        // --- LINE (ផ្ញើទៅ LINE Group ID ឬ User ID ជាច្រើន រួមទាំងរូបភាព) ---
         if (channel === 'line' || channel === 'broadcast') {
             const rawTargets = recipient || process.env.LINE_USER_ID || '';
             const targetLineIds = rawTargets.split(',').map(id => id.trim()).filter(id => id.length > 0);
             
             if (!lineClient) {
-                throw new Error('LINE Client មិនទាន់ត្រូវបានកំណត់ cấu hình!');
+                throw new Error('LINE Client មិនទាន់ត្រូវបានកំណត់ configuration!');
             }
             if (targetLineIds.length === 0) {
                 throw new Error('រកមិនឃើញ LINE Target ID (User ID ឬ Group ID) សម្រាប់ផ្ញើសារ!');
@@ -215,12 +198,10 @@ async function sendNotification(channel, recipient, message, imagesArray) {
 
             const messages = [];
             
-            // ១. 🌟 ដាក់អត្ថបទចូលទៅក្នុង LINE Messages មុនគេ (ដើម្បីឱ្យសារស្ថិតនៅខាងលើ)
             if (message) {
                 messages.push({ type: 'text', text: message });
             }
 
-            // ២. 🌟 ដាក់រូបភាពចូលទៅក្នុង LINE Messages បន្ទាប់មក (ដើម្បីឱ្យរូបភាពស្ថិតនៅខាងក្រោម)
             if (tempFilePaths.length > 0) {
                 for (const fileObj of tempFilePaths) {
                     const publicUrl = await uploadImageToHosting(fileObj.buffer);
@@ -256,7 +237,7 @@ async function sendNotification(channel, recipient, message, imagesArray) {
     }
 }
 
-// ៨. Worker ឆែកសាររង់ចាំ (Cron Job Processing)[cite: 1]
+// ៨. Worker ឆែកសាររង់ចាំ (Cron Job Processing) - អាប់ដេតថ្ងៃខែស្វ័យប្រវត្តិ[cite: 1]
 async function processPendingSchedules() {
     const result = await pool.query(
         `SELECT * FROM scheduled_messages WHERE status = 'Pending' AND schedule_time <= NOW()`
@@ -280,6 +261,8 @@ async function processPendingSchedules() {
                 const minutes = String(scheduleDate.getMinutes()).padStart(2, '0');
 
                 const formattedDateStr = `${day}-${month}-${year} ម៉ោង ${hours}:${minutes}`;
+                
+                // 🔍 ប្តូរទម្រង់ថ្ងៃខែចាស់ក្នុងអត្ថបទឱ្យទៅជាថ្ងៃខែថ្មីតាមកាលវិភាគពិតប្រាកដ
                 messageToSend = messageToSend.replace(/\d{2}-\d{2}-\d{4} ម៉ោង \d{2}:\d{2}/g, formattedDateStr);
             }
             
@@ -315,7 +298,7 @@ app.get('/api/run-cron', async (req, res) => {
     }
 });
 
-// ១០. API ផ្ញើសារភ្លាមៗ (Send Now)[cite: 1]
+// ១០. API ផ្ញើសារភ្លាមៗ (Send Now)[cite: 1, 2]
 app.post('/api/notify/send', upload.array('images', 10), async (req, res) => {
     const { channel, message, phoneNumber, userId } = req.body;
     const recipient = phoneNumber || userId || process.env.TELEGRAM_GROUP_CHAT_ID;
@@ -334,7 +317,7 @@ app.post('/api/notify/send', upload.array('images', 10), async (req, res) => {
     }
 });
 
-// LINE Webhook Endpoint[cite: 1]
+// LINE Webhook Endpoint[cite: 1, 2]
 app.post('/webhook', async (req, res) => {
     try {
         const events = req.body.events || [];

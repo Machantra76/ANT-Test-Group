@@ -236,7 +236,7 @@ async function sendNotification(channel, recipient, message, imagesArray) {
     }
 }
 
-// ៨. Worker ឆែកសាររង់ចាំ (Cron Job Processing) - កែប្រែថ្ងៃខែស្វ័យប្រវត្តិក្នុងអត្ថបទនិង Database[cite: 1, 3]
+// ៨. Worker ឆែកសាររង់ចាំ (Cron Job Processing) - ប្តូរថ្ងៃខែស្វ័យប្រវត្តិក្នុងអត្ថបទនិង Database[cite: 1, 3]
 async function processPendingSchedules() {
     const result = await pool.query(
         `SELECT * FROM scheduled_messages WHERE status = 'Pending' AND schedule_time <= NOW()`
@@ -251,7 +251,7 @@ async function processPendingSchedules() {
             let imagesArray = item.images_data ? JSON.parse(item.images_data) : [];
             let messageToSend = item.message || '';
 
-            // 🌟 យក schedule_time បច្ចុប្បន្នមកបង្កើតជាទម្រង់ថ្ងៃខែថ្មី (ឧ. 26-10-2026)
+            // 🌟 យក schedule_time មកបង្កើតជាទម្រង់ថ្ងៃខែថ្មី (ឧ. 26-10-2026)[cite: 1, 3]
             const scheduleDate = new Date(item.schedule_time);
             const day = String(scheduleDate.getDate()).padStart(2, '0');
             const month = String(scheduleDate.getMonth() + 1).padStart(2, '0');
@@ -261,21 +261,20 @@ async function processPendingSchedules() {
 
             const formattedDateStr = `${day}-${month}-${year} ម៉ោង ${hours}:${minutes}`;
             
-            // 🔍 ស្វែងរកនិងជំនួសថ្ងៃខែចាស់ក្នុងអត្ថបទសារឱ្យទៅជាថ្ងៃខែថ្មី
+            // 🔍 ស្វែងរកនិងជំនួសថ្ងៃខែចាស់ក្នុងអត្ថបទសារឱ្យទៅជាថ្ងៃខែថ្មី[cite: 1, 3]
             if (messageToSend.match(/\d{2}-\d{2}-\d{4}/)) {
                 messageToSend = messageToSend.replace(/\d{2}-\d{2}-\d{4}(?: ម៉ោង \d{2}:\d{2})?/g, formattedDateStr);
             } else {
                 messageToSend += `\n(ថ្ងៃទី៖ ${formattedDateStr})`;
             }
             
-            // ផ្ញើសារចេញទៅកាន់ Telegram / LINE ជាមួយអត្ថបទដែលបានកែថ្ងៃខែរួចរាល់
             await sendNotification(item.channel, item.recipient, messageToSend, imagesArray);
 
             if (item.is_daily) {
                 const currentScheduledDate = new Date(item.schedule_time);
                 currentScheduledDate.setDate(currentScheduledDate.getDate() + 1);
 
-                // 🌟 សំខាន់បំផុត៖ Update ទាំង schedule_time និង message ថ្មីចូល Database វិញសម្រាប់ថ្ងៃបន្ទាប់
+                // 🌟 Update ទាំង schedule_time និង message ថ្មីចូល Database សម្រាប់ថ្ងៃបន្ទាប់[cite: 1, 3]
                 await pool.query(
                     `UPDATE scheduled_messages SET schedule_time = $1, message = $2, status = 'Pending' WHERE id = $3`,
                     [currentScheduledDate.toISOString(), messageToSend, item.id]

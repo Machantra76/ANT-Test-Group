@@ -306,7 +306,7 @@ async function processPendingSchedules() {
     }
     return { count: pendingTasks.length, success: successCount };
 }
-```[cite: 1]
+
 
 ### សេចក្តីសន្និដ្ឋាន៖
 ការកែប្រែខាងលើនឹងធ្វើឱ្យកម្មវិធីរបស់អ្នកស្វែងរកទម្រង់ថ្ងៃខែ (Regex) នៅក្នុងអត្ថបទសារ ហើយជំនួសវាដោយថ្ងៃខែម៉ោងបច្ចុប្បន្ន (`26-10-2026`) មុនពេលបញ្ជូនទៅកាន់ Telegram ឬ LINE ជារៀងរាល់ដង[cite: 1]。

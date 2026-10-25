@@ -292,7 +292,7 @@ async function sendNotification(channel, recipient, message, imagesArray) {
     }
 }
 
-// ៨. Worker ឆែកសាររង់ចាំ (Cron Job Processing) - កែសម្រួល Timezone ម៉ោងកម្ពុជា[cite: 1, 3, 9]
+// ៨. Worker ឆែកសាររង់ចាំ (Cron Job Processing) - កែសម្រួល Timezone ម៉ោងកម្ពុជា[cite: 1, 3, 9, 10]
 async function processPendingSchedules() {
     const result = await pool.query(
         `SELECT * FROM scheduled_messages WHERE status = 'Pending' AND schedule_time <= NOW()`
@@ -308,7 +308,6 @@ async function processPendingSchedules() {
             let messageToSend = item.message || '';
 
             const scheduleDate = new Date(item.schedule_time);
-            
             const options = { timeZone: 'Asia/Phnom_Penh', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false };
             const formatter = new Intl.DateTimeFormat('en-GB', options);
             const parts = formatter.formatToParts(scheduleDate);

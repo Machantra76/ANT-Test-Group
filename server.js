@@ -16,17 +16,15 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
 
-// បង្កើតថត public/uploads ប្រសិនបើមិនទាន់មាន សម្រាប់រក្សាទុករូបភាពផ្ញើទៅ LINE/Telegram
+// បង្កើតថត uploads ប្រសិនបើមិនទាន់มี
 const uploadsDir = path.join(__dirname, 'public', 'uploads');
 if (!fs.existsSync(uploadsDir)) {
     fs.mkdirSync(uploadsDir, { recursive: true });
 }
 
-// កំណត់ឱ្យ Multer រក្សាទុកឯកសារដាក់ក្នុង public/uploads
+// កំណត់ Multer ឱ្យរក្សាទុករូបភាពដាក់ក្នុង public/uploads
 const storage = multer.diskStorage({
-    destination: (req, file, cb) => {
-        cb(null, uploadsDir);
-    },
+    destination: (req, file, cb) => { cb(null, uploadsDir); },
     filename: (req, file, cb) => {
         const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
         cb(null, uniqueSuffix + path.extname(file.originalname));
@@ -34,7 +32,7 @@ const storage = multer.diskStorage({
 });
 const upload = multer({ storage: storage });
 
-// ១. ការតភ្ជាប់ Neon Database[cite: 1, 2]
+// ការតភ្ជាប់ Neon Database[cite: 1, 2]
 const pool = new Pool({
     connectionString: process.env.DATABASE_URL,
     ssl: { rejectUnauthorized: false }
@@ -96,22 +94,20 @@ async function saveLog(channel, recipient, message, status) {
     }
 }
 
-// ៤. Telegram Bot Setup[cite: 1, 2]
+// Telegram Bot Setup[cite: 1, 2]
 const telegramToken = process.env.TELEGRAM_BOT_TOKEN;
 let telegramBot = null;
 if (telegramToken && !telegramToken.includes('YOUR_TELEGRAM')) {
     try {
         telegramBot = new TelegramBot(telegramToken, { polling: true });
-        telegramBot.on('polling_error', (error) => {
-            console.log(`⚠️ Telegram Polling Warning:`, error.code);
-        });
+        telegramBot.on('polling_error', (error) => { console.log(`⚠️ Telegram Polling Warning:`, error.code); });
         console.log('✅ [Telegram Bot] តភ្ជាប់ជោគជ័យ!');
     } catch (err) {
         console.error('❌ [Telegram Setup Error]:', err.message);
     }
 }
 
-// ៦. LINE Bot Setup[cite: 1, 2]
+// LINE Bot Setup[cite: 1, 2]
 const lineConfig = {
     channelAccessToken: process.env.LINE_CHANNEL_ACCESS_TOKEN || '',
     channelSecret: process.env.LINE_CHANNEL_SECRET || ''
@@ -120,7 +116,7 @@ const lineClient = (lineConfig.channelAccessToken && !lineConfig.channelAccessTo
     ? new line.Client(lineConfig)
     : null;
 
-// ៧. Core Function សម្រាប់បញ្ជូនសារ (គាំទ្រ Telegram Media Group & LINE Images/Text)[cite: 1, 2, 4]
+// Core Function សម្រាប់បញ្ជូនសារ (Telegram Media Group & LINE Images/Text)[cite: 1, 2]
 async function sendNotification(channel, recipient, message, imagesArray, baseUrl = '') {
     try {
         // --- Telegram (គាំទ្រការផ្ញើរូបភាពច្រើនសន្លឹកជា Media Group / Album) ---
@@ -164,17 +160,11 @@ async function sendNotification(channel, recipient, message, imagesArray, baseUr
             const rawTargets = recipient || process.env.LINE_USER_ID || '';
             const targetLineIds = rawTargets.split(',').map(id => id.trim()).filter(id => id.length > 0);
             
-            if (!lineClient) {
-                throw new Error('LINE Client មិនទាន់ត្រូវបានកំណត់ configuration!');
-            }
-            if (targetLineIds.length === 0) {
-                throw new Error('រកមិនឃើញ LINE Target ID (User ID ឬ Group ID)!');
-            }
+            if (!lineClient) throw new Error('LINE Client មិនទាន់ត្រូវបានកំណត់ configuration!');
+            if (targetLineIds.length === 0) throw new Error('រកមិនឃើញ LINE Target ID!');
 
             const messages = [];
-            if (message) {
-                messages.push({ type: 'text', text: message });
-            }
+            if (message) messages.push({ type: 'text', text: message });
 
             if (imagesArray && imagesArray.length > 0) {
                 imagesArray.forEach(img => {
@@ -192,7 +182,6 @@ async function sendNotification(channel, recipient, message, imagesArray, baseUr
                     try {
                         await lineClient.pushMessage(targetId, messages);
                         await saveLog('LINE', targetId, message || '[Photos]', 'Success');
-                        console.log(`✅ [LINE Success] បានផ្ញើទៅកាន់ Target ID: ${targetId}`);
                     } catch (lineApiErr) {
                         console.error(`❌ [LINE API Error for ${targetId}]:`, lineApiErr.originalError?.response?.data || lineApiErr.message);
                         await saveLog('LINE', targetId, message || '[Photos]', `Failed: ${lineApiErr.message}`);
@@ -205,7 +194,7 @@ async function sendNotification(channel, recipient, message, imagesArray, baseUr
     }
 }
 
-// ៨. Worker ឆែកសាររង់ចាំ (Cron Job Processing)[cite: 1, 2]
+// Worker ឆែកសាររង់ចាំ (Cron Job Processing)[cite: 1, 2]
 async function processPendingSchedules() {
     const result = await pool.query(
         `SELECT * FROM scheduled_messages WHERE status = 'Pending' AND schedule_time <= NOW()`
@@ -227,7 +216,6 @@ async function processPendingSchedules() {
                 const year = scheduleDate.getFullYear();
                 const hours = String(scheduleDate.getHours()).padStart(2, '0');
                 const minutes = String(scheduleDate.getMinutes()).padStart(2, '0');
-
                 const formattedDateStr = `${day}-${month}-${year} ម៉ោង ${hours}:${minutes}`;
                 messageToSend = messageToSend.replace(/\d{2}-\d{2}-\d{4} ម៉ោង \d{2}:\d{2}/g, formattedDateStr);
             }
@@ -238,12 +226,10 @@ async function processPendingSchedules() {
             if (item.is_daily) {
                 const currentScheduledDate = new Date(item.schedule_time);
                 currentScheduledDate.setDate(currentScheduledDate.getDate() + 1);
-
                 await pool.query(
                     `UPDATE scheduled_messages SET schedule_time = $1, status = 'Pending' WHERE id = $2`,
                     [currentScheduledDate.toISOString(), item.id]
                 );
-                console.log(`🔄 [Daily Schedule] បានអាប់ដេតម៉ោងផ្ញើសម្រាប់ថ្ងៃស្អែក៖ ${currentScheduledDate.toLocaleString()}`);
             } else {
                 await pool.query("UPDATE scheduled_messages SET status = 'Sent' WHERE id = $1", [item.id]);
             }
@@ -265,7 +251,7 @@ app.get('/api/run-cron', async (req, res) => {
     }
 });
 
-// ១០. API ផ្ញើសារភ្លាមៗ (Send Now)[cite: 1, 2]
+// API ផ្ញើសារភ្លាមៗ (Send Now)[cite: 1, 2]
 app.post('/api/notify/send', upload.array('images', 10), async (req, res) => {
     const { channel, message, phoneNumber, userId } = req.body;
     const recipient = phoneNumber || userId || process.env.TELEGRAM_GROUP_CHAT_ID;
@@ -291,18 +277,12 @@ app.post('/webhook', async (req, res) => {
         const events = req.body.events || [];
         for (const event of events) {
             if (event.source) {
-                console.log(`📌 [LINE Webhook Source Type]: ${event.source.type}`);
-                if (event.source.groupId) {
-                    console.log(`🎯 [LINE GROUP ID រកឃើញ]: ${event.source.groupId}`);
-                }
-                if (event.source.userId) {
-                    console.log(`👤 [LINE User ID]: ${event.source.userId}`);
-                }
+                if (event.source.groupId) console.log(`🎯 [LINE GROUP ID]: ${event.source.groupId}`);
+                if (event.source.userId) console.log(`👤 [LINE User ID]: ${event.source.userId}`);
             }
         }
         res.status(200).json({ success: true });
     } catch (err) {
-        console.error('❌ [Webhook Error]:', err);
         res.status(200).json({ success: false });
     }
 });

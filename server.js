@@ -271,18 +271,17 @@ async function processPendingSchedules() {
             let imagesArray = item.images_data ? JSON.parse(item.images_data) : [];
             let messageToSend = item.message || '';
 
-            // 🌟 កែប្រែត្រង់នេះ៖ មិនថា is_daily ឬអត់ទេ ឱ្យវាទាញយកកាលបរិច្ឆេទពិតប្រាកដពេលដែលសារត្រូវផ្ញើ (Current Time ឬ schedule_time) មកជំនួសក្នុងអត្ថបទសារ
-            const scheduleDate = new Date(); // ឬប្រើ schedule_time តាមការចង់បាន
-            const day = String(scheduleDate.getDate()).padStart(2, '0');
-            const month = String(scheduleDate.getMonth() + 1).padStart(2, '0');
-            const year = scheduleDate.getFullYear();
-            const hours = String(scheduleDate.getHours()).padStart(2, '0');
-            const minutes = String(scheduleDate.getMinutes()).padStart(2, '0');
+            if (item.is_daily) {
+                const scheduleDate = new Date(item.schedule_time);
+                const day = String(scheduleDate.getDate()).padStart(2, '0');
+                const month = String(scheduleDate.getMonth() + 1).padStart(2, '0');
+                const year = scheduleDate.getFullYear();
+                const hours = String(scheduleDate.getHours()).padStart(2, '0');
+                const minutes = String(scheduleDate.getMinutes()).padStart(2, '0');
 
-            const formattedDateStr = `${day}-${month}-${year} ម៉ោង ${hours}:${minutes}`;
-            
-            // ធ្វើការ Replace ទម្រង់ថ្ងៃខែចាស់ (DD-MM-YYYY ម៉ោង HH:MM) ក្នុងអត្ថបទសារ ឱ្យទៅជាថ្ងៃខែបច្ចុប្បន្នស្វ័យប្រវត្តិ
-            messageToSend = messageToSend.replace(/\d{2}-\d{2}-\d{4} ម៉ោង \d{2}:\d{2}/g, formattedDateStr);
+                const formattedDateStr = `${day}-${month}-${year} ម៉ោង ${hours}:${minutes}`;
+                messageToSend = messageToSend.replace(/\d{2}-\d{2}-\d{4} ម៉ោង \d{2}:\d{2}/g, formattedDateStr);
+            }
             
             await sendNotification(item.channel, item.recipient, messageToSend, imagesArray);
 
@@ -307,9 +306,6 @@ async function processPendingSchedules() {
     return { count: pendingTasks.length, success: successCount };
 }
 
-
-### សេចក្តីសន្និដ្ឋាន៖
-ការកែប្រែខាងលើនឹងធ្វើឱ្យកម្មវិធីរបស់អ្នកស្វែងរកទម្រង់ថ្ងៃខែ (Regex) នៅក្នុងអត្ថបទសារ ហើយជំនួសវាដោយថ្ងៃខែម៉ោងបច្ចុប្បន្ន (`26-10-2026`) មុនពេលបញ្ជូនទៅកាន់ Telegram ឬ LINE ជារៀងរាល់ដង[cite: 1]。
 app.get('/api/run-cron', async (req, res) => {
     try {
         const result = await processPendingSchedules();
@@ -454,3 +450,4 @@ app.get('/api/logs', async (req, res) => {
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 
 app.listen(PORT, '0.0.0.0', () => console.log(`🚀 Server កំពុងរត់លើ http://localhost:${PORT}`));
+```[cite: 1]

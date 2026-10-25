@@ -1,6 +1,4 @@
 require('dotenv').config();
-const { Client: WhatsAppClient, LocalAuth } = require('whatsapp-web.js');
-const qrcode = require('qrcode-terminal');
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
@@ -9,7 +7,7 @@ const TelegramBot = require('node-telegram-bot-api');
 const line = require('@line/bot-sdk');
 const { Pool } = require('pg');
 const fs = require('fs');
-const axios = require('axios');
+const axios = require('axios'); // បន្ថែមសម្រាប់ช่วย Upload រូបភាពយក Link សម្រាប់ LINE[cite: 1]
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -20,26 +18,6 @@ app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
 
 const upload = multer({ storage: multer.memoryStorage() });
-
-// --- WhatsApp Bot Setup ---
-const whatsappClient = new WhatsAppClient({
-    authStrategy: new LocalAuth()
-});
-
-whatsappClient.on('qr', (qr) => {
-    console.log('📌 [WhatsApp] សូមស្កេន QR Code ខាងក្រោមនេះ ដើម្បីតភ្ជាប់ WhatsApp:');
-    qrcode.generate(qr, { small: true });
-});
-
-whatsappClient.on('ready', () => {
-    console.log('✅ [WhatsApp Bot] តភ្ជាប់ និងរួចរាល់សម្រាប់ការប្រើប្រាស់!');
-});
-
-whatsappClient.on('auth_failure', (msg) => {
-    console.error('❌ [WhatsApp Auth Failure]:', msg);
-});
-
-whatsappClient.initialize();
 
 // ១. ការតភ្ជាប់ Neon Database[cite: 1]
 const pool = new Pool({
@@ -103,7 +81,32 @@ async function saveLog(channel, recipient, message, status) {
     }
 }
 
-// មុខងារជំនួយ៖ Upload រូបភាពទៅកាន់ Cloudinary[cite: 1]
+// មុខងារជំនួយ៖ Upload រូបភាពទៅកាន់ ImgBB ដើម្បីយក Public URL មកប្រើលើ LINE[cite: 1]
+async function uploadImageToHosting(buffer) {
+    try {
+        const axios = require('axios');
+        const FormData = require('form-data');
+        
+        const form = new FormData();
+        // បម្លែង Buffer ទៅជា base64 string ឱ្យបានត្រឹមត្រូវ
+        form.append('image', buffer.toString('base64'));
+
+        const apiKey = process.env.IMGBB_API_KEY;
+        const response = await axios.post(`https://api.imgbb.com/1/upload?key=${apiKey}`, form, {
+            headers: {
+                ...form.getHeaders()
+            }
+        });
+
+        if (response.data && response.data.success) {
+            console.log('✅ [ImgBB Success] Link:', response.data.data.url);
+            return response.data.data.url;
+        }
+    } catch (error) {
+        console.error('❌ [Image Upload Error Details]:', error.response?.data || error.message);
+    }
+    return null;
+}
 const cloudinary = require('cloudinary').v2;
 
 cloudinary.config({
@@ -154,7 +157,7 @@ const lineClient = (lineConfig.channelAccessToken && !lineConfig.channelAccessTo
     ? new line.Client(lineConfig)
     : null;
 
-// ៧. Core Function សម្រាប់បញ្ជូនសារ (គាំទ្រ Telegram, LINE និង WhatsApp)[cite: 1]
+// ៧. Core Function សម្រាប់បញ្ជូនសារ (គាំទ្រ Telegram & LINE ច្រើន Target IDs ព្រមទាំងរូបភាព)[cite: 1]
 async function sendNotification(channel, recipient, message, imagesArray) {
     let tempFilePaths = [];
     
@@ -172,7 +175,7 @@ async function sendNotification(channel, recipient, message, imagesArray) {
             }
         }
 
-        // --- Telegram ---
+        // --- Telegram (รองรับหลาย Chat ID คั่นด้วยเครื่องหมายจุลภาค) ---
         if (channel === 'telegram' || channel === 'broadcast') {
             const rawTargets = recipient || process.env.TELEGRAM_GROUP_CHAT_ID || '';
             const targetIds = rawTargets.split(',').map(id => id.trim()).filter(id => id.length > 0);
@@ -197,7 +200,8 @@ async function sendNotification(channel, recipient, message, imagesArray) {
             }
         }
 
-        // --- LINE ---
+        // --- LINE (ផ្ញើទៅ LINE Group ID ឬ User ID ជាច្រើន រួមទាំងរូបភាព)[cite: 1] ---
+       // --- LINE (ផ្ញើទៅ LINE Group ID ឬ User ID ជាច្រើន រួមទាំងរូបភាព) ---
         if (channel === 'line' || channel === 'broadcast') {
             const rawTargets = recipient || process.env.LINE_USER_ID || '';
             const targetLineIds = rawTargets.split(',').map(id => id.trim()).filter(id => id.length > 0);
@@ -211,10 +215,12 @@ async function sendNotification(channel, recipient, message, imagesArray) {
 
             const messages = [];
             
+            // ១. 🌟 ដាក់អត្ថបទចូលទៅក្នុង LINE Messages មុនគេ (ដើម្បីឱ្យសារស្ថិតនៅខាងលើ)
             if (message) {
                 messages.push({ type: 'text', text: message });
             }
 
+            // ២. 🌟 ដាក់រូបភាពចូលទៅក្នុង LINE Messages បន្ទាប់មក (ដើម្បីឱ្យរូបភាពស្ថិតនៅខាងក្រោម)
             if (tempFilePaths.length > 0) {
                 for (const fileObj of tempFilePaths) {
                     const publicUrl = await uploadImageToHosting(fileObj.buffer);
@@ -241,41 +247,6 @@ async function sendNotification(channel, recipient, message, imagesArray) {
                 }
             }
         }
-
-        // --- WhatsApp ---
-        if (channel === 'whatsapp' || channel === 'broadcast') {
-            const rawTargets = recipient || process.env.WHATSAPP_PHONE_NUMBER || '';
-            const targetPhoneNumbers = rawTargets.split(',').map(id => id.trim()).filter(id => id.length > 0);
-
-            if (targetPhoneNumbers.length > 0) {
-                for (let phoneNumber of targetPhoneNumbers) {
-                    try {
-                        let formattedId = phoneNumber.includes('@c.us') || phoneNumber.includes('@g.us') 
-                            ? phoneNumber 
-                            : `${phoneNumber.replace(/[^0-9]/g, '')}@c.us`;
-
-                        if (tempFilePaths.length > 0) {
-                            const { MessageMedia } = require('whatsapp-web.js');
-                            for (let i = 0; i < tempFilePaths.length; i++) {
-                                const fileObj = tempFilePaths[i];
-                                const media = MessageMedia.fromFilePath(fileObj.path);
-                                const captionText = (i === 0 && message) ? message : '';
-                                await whatsappClient.sendMessage(formattedId, media, { caption: captionText });
-                            }
-                        } else if (message) {
-                            await whatsappClient.sendMessage(formattedId, message);
-                        }
-
-                        await saveLog('WhatsApp', phoneNumber, message || '[Photos]', 'Success');
-                        console.log(`✅ [WhatsApp Success] បានបញ្ជូនទៅកាន់៖ ${phoneNumber}`);
-                    } catch (waErr) {
-                        console.error(`❌ [WhatsApp Error for ${phoneNumber}]:`, waErr.message);
-                        await saveLog('WhatsApp', phoneNumber, message || '[Photos]', `Failed: ${waErr.message}`);
-                    }
-                }
-            }
-        }
-
     } finally {
         for (const fileObj of tempFilePaths) {
             if (fs.existsSync(fileObj.path)) {

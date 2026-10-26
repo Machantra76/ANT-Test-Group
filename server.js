@@ -88,6 +88,7 @@ cloudinary.config({
     api_secret: process.env.CLOUDINARY_API_SECRET
 });
 
+// 🌟 បន្ថែម resource_type: 'auto' ដើម្បីឱ្យ Cloudinary ទទួលទាំង Image និង Video ស្វ័យប្រវត្តិ
 async function uploadImageToHosting(buffer) {
     return new Promise((resolve, reject) => {
         const uploadStream = cloudinary.uploader.upload_stream(
@@ -156,6 +157,7 @@ async function sendNotification(channel, recipient, message, imagesArray) {
                         }
                         if (tempFilePaths.length > 0) {
                             for (const fileObj of tempFilePaths) {
+                                // 🌟 ឆែកប្រភេទ file ប្រសិនបើជា video ឱ្យប្រើ sendVideo បើមិនដូច្នោះទេប្រើ sendPhoto
                                 if (fileObj.mimetype && fileObj.mimetype.startsWith('video/')) {
                                     await telegramBot.sendVideo(targetId, fileObj.path);
                                 } else {
@@ -192,6 +194,7 @@ async function sendNotification(channel, recipient, message, imagesArray) {
                 for (const fileObj of tempFilePaths) {
                     const publicUrl = await uploadImageToHosting(fileObj.buffer);
                     if (publicUrl) {
+                        // 🌟 ឆែកប្រភេទ file ប្រសិនបើជា video ឱ្យបន្ថែម type ជា video របស់ LINE
                         if (fileObj.mimetype && fileObj.mimetype.startsWith('video/')) {
                             messages.push({
                                 type: 'video',
@@ -222,66 +225,6 @@ async function sendNotification(channel, recipient, message, imagesArray) {
                 }
             }
         }
-
-        // 🌟 ផ្នែកបន្ថែមសម្រាប់ WHATSAPP CLOUD API (សុវត្ថិភាព មិនប៉ះពាល់កូដចាស់)
-        if (channel === 'whatsapp' || channel === 'broadcast') {
-            const rawTargets = recipient || process.env.WHATSAPP_TO || '';
-            const targetPhones = rawTargets.split(',').map(id => id.trim()).filter(id => id.length > 0);
-            
-            const waToken = process.env.WHATSAPP_TOKEN;
-            const phoneId = process.env.WHATSAPP_PHONE_NUMBER_ID;
-
-            if (waToken && phoneId && targetPhones.length > 0) {
-                for (const phone of targetPhones) {
-                    try {
-                        // ផ្ញើសារអត្ថបទ (Text Message)
-                        if (message) {
-                            await axios.post(
-                                `https://graph.facebook.com/v17.0/${phoneId}/messages`,
-                                {
-                                    messaging_product: 'whatsapp',
-                                    to: phone,
-                                    type: 'text',
-                                    text: { body: message }
-                                },
-                                {
-                                    headers: { Authorization: `Bearer ${waToken}` }
-                                }
-                            );
-                        }
-
-                        // ផ្ញើរូបភាព ឬ Media បើមាន
-                        if (tempFilePaths.length > 0) {
-                            for (const fileObj of tempFilePaths) {
-                                const publicUrl = await uploadImageToHosting(fileObj.buffer);
-                                if (publicUrl) {
-                                    const isVideo = fileObj.mimetype && fileObj.mimetype.startsWith('video/');
-                                    await axios.post(
-                                        `https://graph.facebook.com/v17.0/${phoneId}/messages`,
-                                        {
-                                            messaging_product: 'whatsapp',
-                                            to: phone,
-                                            type: isVideo ? 'video' : 'image',
-                                            [isVideo ? 'video' : 'image']: { link: publicUrl }
-                                        },
-                                        {
-                                            headers: { Authorization: `Bearer ${waToken}` }
-                                        }
-                                    );
-                                }
-                            }
-                        }
-
-                        await saveLog('WhatsApp', phone, message || '[Media]', 'Success');
-                        console.log(`✅ [WhatsApp Success] បានផ្ញើទៅកាន់លេខ: ${phone}`);
-                    } catch (waErr) {
-                        console.error(`❌ [WhatsApp Error for ${phone}]:`, waErr.response?.data || waErr.message);
-                        await saveLog('WhatsApp', phone, message || '[Media]', `Failed: ${waErr.message}`);
-                    }
-                }
-            }
-        }
-
     } finally {
         for (const fileObj of tempFilePaths) {
             if (fs.existsSync(fileObj.path)) {

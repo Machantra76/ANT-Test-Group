@@ -197,17 +197,12 @@
             </select>
         </div>
 
-        <!-- 🆕 Dropdown ជ្រើសរើស Group ព្រមទាំងប៊ូតុងជ្រើសរើសទាំងអស់ -->
+        <!-- 🆕 Dropdown ជ្រើសរើស Group -->
         <div class="form-group">
             <label for="groupSelect">ជ្រើសរើសគ្រុប (Select Group):</label>
-            <div style="display: flex; gap: 10px;">
-                <select id="groupSelect" name="groupSelect" onchange="onGroupSelected()" style="flex: 1;">
-                    <option value="">-- ជ្រើសរើសគ្រុប ឬបញ្ចូលដោយដៃខាងក្រោម --</option>
-                </select>
-                <button type="button" onclick="selectAllGroups()" style="flex: 0 0 auto; padding: 0 15px; background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%); border-radius: 8px; font-size: 13px; font-weight: 600; color: white; border: none; cursor: pointer; box-shadow: 0 2px 5px rgba(0,0,0,0.1);">
-                    🔥 គ្រប់គ្រុបទាំងអស់
-                </button>
-            </div>
+            <select id="groupSelect" name="groupSelect" onchange="onGroupSelected()">
+                <option value="">-- ជ្រើសរើសគ្រុប ឬបញ្ចូលដោយដៃខាងក្រោម --</option>
+            </select>
         </div>
 
         <div class="form-group">
@@ -339,26 +334,6 @@
         const phoneNumberInput = document.getElementById('phoneNumber');
         if (groupSelect.value) {
             phoneNumberInput.value = groupSelect.value;
-        }
-    }
-
-    // 🌟 មុខងារសម្រាប់ទាញយក Chat ID របស់គ្រុបទាំងអស់មកដាក់បញ្ចូលគ្នាចុចតែម្តង
-    async function selectAllGroups() {
-        try {
-            const res = await fetch('/api/groups');
-            const data = await res.json();
-            
-            if (data.success && data.groups && data.groups.length > 0) {
-                const allGroupIds = data.groups.map(group => group.id).join(',');
-                document.getElementById('phoneNumber').value = allGroupIds;
-                document.getElementById('channel').value = 'broadcast';
-                showAlert(`បានទាញយក Chat ID គ្រុបសរុបចំនួន ${data.groups.length} មកដាក់បញ្ចូលគ្នាដោយជោគជ័យ!`, true);
-            } else {
-                showAlert('រកមិនឃើញគ្រុបណាមួយត្រូវបានរក្សាទុកក្នុងប្រព័ន្ធទេ!', false);
-            }
-        } catch (err) {
-            console.error('Error:', err);
-            showAlert('មានបញ្ហាក្នុងការទាញយកបញ្ជីគ្រុប!', false);
         }
     }
 

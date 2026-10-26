@@ -25,38 +25,69 @@
             align-items: center;
         }
 
-        .container { 
+        /* 🌟 ຈັດ Layout បែងចែកជា 2 Column (ឆ្វេង និង ស្តាំ) */
+        .main-layout {
+            display: flex;
+            flex-direction: row;
+            gap: 25px;
             width: 100%;
-            max-width: 850px; 
-            background: #ffffff; 
-            padding: 35px 30px; 
-            border-radius: 16px; 
-            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.08); 
-            border: 1px solid #e2e8f0;
-            margin-bottom: 30px;
+            max-width: 1350px;
+            align-items: flex-start;
         }
 
-        /* 🌟 Modern Card for Group Creation */
+        .left-column {
+            flex: 1.2;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .right-column {
+            flex: 1.8;
+            display: flex;
+            flex-direction: column;
+            gap: 25px;
+        }
+
+        .container { 
+            width: 100%;
+            background: #ffffff; 
+            padding: 30px 25px; 
+            border-radius: 16px; 
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.08); 
+            border: 2px solid #3b82f6;
+            transition: all 0.3s ease;
+        }
+
+        .container:hover {
+            box-shadow: 0 15px 30px -5px rgba(59, 130, 246, 0.15);
+        }
+
+        /* 🌟 Modern Card for Group Creation (Highlighted Frame 2) */
         .group-card {
             background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
-            border: 1px solid #cbd5e1;
-            border-left: 5px solid #3b82f6;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.03);
+            border: 2px solid #8b5cf6;
+            box-shadow: 0 4px 12px rgba(139, 92, 246, 0.15);
+        }
+
+        /* 🌟 Highlight Scheduled Messages Container (Highlighted Frame 3) */
+        .schedule-card {
+            border: 2px solid #10b981;
+            box-shadow: 0 4px 12px rgba(16, 185, 129, 0.15);
         }
 
         h2, h3 { 
             text-align: center; 
             color: #0f172a; 
             margin-top: 0;
-            margin-bottom: 25px; 
+            margin-bottom: 20px; 
             font-weight: 700;
         }
 
-        .form-group { margin-bottom: 20px; }
+        .form-group { margin-bottom: 18px; }
 
         label { 
             display: block; 
-            margin-bottom: 8px; 
+            margin-bottom: 6px; 
             font-weight: 600; 
             color: #334155; 
             font-size: 14px;
@@ -64,7 +95,7 @@
 
         select, input[type="text"], input[type="datetime-local"], textarea { 
             width: 100%; 
-            padding: 12px 14px; 
+            padding: 10px 14px; 
             border: 1.5px solid #cbd5e1; 
             border-radius: 8px; 
             font-size: 14px; 
@@ -83,12 +114,12 @@
         .btn-group { 
             display: flex; 
             gap: 12px; 
-            margin-top: 25px; 
+            margin-top: 20px; 
         }
 
         button { 
             flex: 1; 
-            padding: 14px; 
+            padding: 12px; 
             border: none; 
             border-radius: 10px; 
             font-size: 15px; 
@@ -114,24 +145,23 @@
 
         /* Table Styling */
         .table-responsive { width: 100%; overflow-x: auto; }
-        table { width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 14px; }
-        th, td { padding: 14px 12px; text-align: left; border-bottom: 1px solid #e2e8f0; vertical-align: middle; }
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 14px; }
+        th, td { padding: 12px 10px; text-align: left; border-bottom: 1px solid #e2e8f0; vertical-align: middle; }
         th { background-color: #f1f5f9; color: #334155; font-weight: 700; }
 
-        .badge { padding: 5px 10px; border-radius: 6px; font-size: 12px; font-weight: 600; display: inline-block; }
+        .badge { padding: 4px 8px; border-radius: 6px; font-size: 12px; font-weight: 600; display: inline-block; }
         .badge-pending { background-color: #fef3c7; color: #d97706; }
         .badge-sent { background-color: #dcfce7; color: #15803d; }
         .badge-failed { background-color: #fee2e2; color: #b91c1c; }
         .badge-daily { background-color: #e0e7ff; color: #4338ca; }
 
-        /* 🌟 Improved Table Action Buttons (Clean & Spaced) */
         .action-cell {
             display: flex;
             align-items: center;
-            gap: 8px; /* បង្កើតគម្លាតដាច់ពីគ្នា */
+            gap: 8px;
         }
         .btn-action { 
-            padding: 8px 14px; 
+            padding: 6px 12px; 
             font-size: 13px; 
             font-weight: 600;
             border-radius: 8px; 
@@ -147,8 +177,8 @@
         .btn-delete:hover { opacity: 0.9; transform: translateY(-1px); }
 
         #alert { 
-            margin-top: 20px; 
-            padding: 14px; 
+            margin-top: 15px; 
+            padding: 12px; 
             border-radius: 8px; 
             display: none; 
             text-align: center; 
@@ -156,118 +186,135 @@
         }
         .alert-success { background-color: #dcfce7; color: #15803d; border: 1px solid #bbf7d0; }
         .alert-error { background-color: #fee2e2; color: #b91c1c; border: 1px solid #fecaca; }
+
+        @media (max-width: 992px) {
+            .main-layout {
+                flex-direction: column;
+            }
+        }
     </style>
 </head>
 <body>
 
-<!-- 🌟 🆕 បញ្ចូលកាតបង្កើត Group ថ្មីឱ្យមើលទៅកាន់តែលុយនិងស្អាត -->
-<div class="container group-card">
-    <h3 style="color: #1e40af; display: flex; align-items: center; justify-content: center; gap: 8px;">
-        <span>✨</span> បង្កើត Group ឬ Chat ID ថ្មី
-    </h3>
-    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
-        <div class="form-group" style="margin-bottom: 0;">
-            <label for="newGroupName">ឈ្មោះ Group (Group Name):</label>
-            <input type="text" id="newGroupName" placeholder="ឧ. គ្រុបផ្នែកលក់ (Sales)">
-        </div>
-        <div class="form-group" style="margin-bottom: 0;">
-            <label for="newGroupId">Chat ID ឬ លេខទូរស័ព្ទ:</label>
-            <input type="text" id="newGroupId" placeholder="ឧ. -100123456789">
+<div class="main-layout">
+    <!-- 👈 ផ្នែកខាងឆ្វេង៖ Notification Hub (Frame 1) -->
+    <div class="left-column">
+        <div class="container">
+            <h2 id="formTitle">Notification Hub (Telegram / LINE / WhatsApp)</h2>
+            <form id="notifyForm" enctype="multipart/form-data">
+                <input type="hidden" id="editId" name="editId">
+
+                <div class="form-group">
+                    <label for="channel">ជ្រើសរើសប្រព័ន្ធ (Channel):</label>
+                    <select id="channel" name="channel" required>
+                        <option value="telegram">Telegram</option>
+                        <option value="whatsapp">WhatsApp</option>
+                        <option value="line">LINE</option>
+                        <option value="broadcast">Broadcast ទាំងអស់</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="groupSelect">ជ្រើសរើសគ្រុប (Select Group):</label>
+                    <div style="display: flex; gap: 10px;">
+                        <select id="groupSelect" name="groupSelect" onchange="onGroupSelected()" style="flex: 1;">
+                            <option value="">-- ជ្រើសរើសគ្រុប ឬបញ្ចូលដោយដៃខាងក្រោម --</option>
+                        </select>
+                        <button type="button" onclick="selectAllGroups()" style="flex: 0 0 auto; padding: 0 15px; background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%); border-radius: 8px; font-size: 13px; font-weight: 600; color: white; border: none; cursor: pointer; box-shadow: 0 2px 5px rgba(0,0,0,0.1);">
+                            🔥 គ្រុបទាំងអស់
+                        </button>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="phoneNumber">លេខទូរស័ព្ទ / Group / Chat ID (ជម្រើសបន្ថែម):</label>
+                    <input type="text" id="phoneNumber" name="phoneNumber" placeholder="ឧទាហរណ៍៖ 85512345678 ឬ Chat ID">
+                </div>
+
+                <div class="form-group">
+                    <label for="message">ខ្លឹមសារសារ (Message):</label>
+                    <textarea id="message" name="message" rows="4" placeholder="វាយអត្ថបទសារទីនេះ..."></textarea>
+                </div>
+
+                <div class="form-group">
+                    <label for="images">ភ្ជាប់រូបភាព ឬ វីដេអូ (Images & Videos - Optional):</label>
+                    <input type="file" id="images" name="images" accept="image/*,video/*" multiple>
+                </div>
+
+                <div class="form-group">
+                    <label for="scheduleTime">ម៉ោងត្រូវផ្ញើ (កំណត់ពេល Schedule):</label>
+                    <input type="datetime-local" id="scheduleTime" name="scheduleTime">
+                </div>
+
+                <div class="form-group" style="display: flex; align-items: center; gap: 10px; background: #f8fafc; padding: 10px; border-radius: 8px; border: 1.5px solid #cbd5e1;">
+                    <input type="checkbox" id="isDaily" name="isDaily" value="true" style="width: 20px; height: 20px; cursor: pointer;">
+                    <label for="isDaily" style="margin-bottom: 0; cursor: pointer; color: #0f172a; font-weight: 600;">
+                        🔄 ផ្ញើស្វ័យប្រវត្តិរាល់ថ្ងៃ (Daily Auto-Send)
+                    </label>
+                </div>
+
+                <div class="btn-group">
+                    <button type="button" id="btnSend" class="btn-send" onclick="submitForm('/api/notify/send')">
+                        🚀 ផ្ញើភ្លាមៗ
+                    </button>
+                    <button type="button" id="btnSchedule" class="btn-schedule" onclick="handleScheduleSubmit()">
+                        ⏰ កំណត់ពេល
+                    </button>
+                    <button type="button" id="btnCancel" class="btn-cancel" onclick="resetForm()">
+                        ✖ បោះបង់
+                    </button>
+                </div>
+            </form>
+
+            <div id="alert"></div>
         </div>
     </div>
-    <div style="margin-top: 20px;">
-        <button type="button" class="btn-send" onclick="addNewGroup()" style="width: 100%; border-radius: 8px;">
-            💾 រក្សាទុក Group ថ្មី
-        </button>
-    </div>
-</div>
 
-<div class="container">
-    <h2 id="formTitle">Notification Hub (Telegram / LINE / WhatsApp)</h2>
-    <form id="notifyForm" enctype="multipart/form-data">
-        <input type="hidden" id="editId" name="editId">
-
-        <div class="form-group">
-            <label for="channel">ជ្រើសរើសប្រព័ន្ធ (Channel):</label>
-            <select id="channel" name="channel" required>
-                <option value="telegram">Telegram</option>
-                <option value="whatsapp">WhatsApp</option>
-                <option value="line">LINE</option>
-                <option value="broadcast">Broadcast ទាំងអស់</option>
-            </select>
+    <!-- 👉 ផ្នែកខាងស្តាំ៖ បង្កើត Group (Frame 2) និង បញ្ជីសារកំណត់ពេល (Frame 3) តម្រៀបលើក្រោមគ្នា -->
+    <div class="right-column">
+        <!-- 🌟 Frame 2: បង្កើត Group ឬ Chat ID ថ្មី -->
+        <div class="container group-card">
+            <h3 style="color: #7c3aed; display: flex; align-items: center; justify-content: center; gap: 8px;">
+                <span>✨</span> បង្កើត Group ឬ Chat ID ថ្មី
+            </h3>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                <div class="form-group" style="margin-bottom: 0;">
+                    <label for="newGroupName">ឈ្មោះ Group (Group Name):</label>
+                    <input type="text" id="newGroupName" placeholder="ឧ. គ្រុបផ្នែកលក់">
+                </div>
+                <div class="form-group" style="margin-bottom: 0;">
+                    <label for="newGroupId">Chat ID ឬ លេខទូរស័ព្ទ:</label>
+                    <input type="text" id="newGroupId" placeholder="ឧ. -100123456789">
+                </div>
+            </div>
+            <div style="margin-top: 15px;">
+                <button type="button" class="btn-send" onclick="addNewGroup()" style="width: 100%; border-radius: 8px; background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);">
+                    💾 រក្សាទុក Group ថ្មី
+                </button>
+            </div>
         </div>
 
-        <!-- 🆕 Dropdown ជ្រើសរើស Group -->
-        <div class="form-group">
-            <label for="groupSelect">ជ្រើសរើសគ្រុប (Select Group):</label>
-            <select id="groupSelect" name="groupSelect" onchange="onGroupSelected()">
-                <option value="">-- ជ្រើសរើសគ្រុប ឬបញ្ចូលដោយដៃខាងក្រោម --</option>
-            </select>
+        <!-- 🌟 Frame 3: បញ្ជីសារដែលបានកំណត់ពេល (Scheduled Messages) -->
+        <div class="container schedule-card">
+            <h3 style="color: #059669;">📊 បញ្ជីសារដែលបានកំណត់ពេល (Scheduled Messages)</h3>
+            <div class="table-responsive">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Channel</th>
+                            <th>ឈ្មោះគ្រុប / Chat ID</th>
+                            <th>សារ</th>
+                            <th>ម៉ោងផ្ញើ</th>
+                            <th>ស្ថានភាព</th>
+                            <th>សកម្មភាព</th>
+                        </tr>
+                    </thead>
+                    <tbody id="scheduleTableBody">
+                        <tr><td colspan="6" style="text-align:center;">កំពុងទាញយកទិន្នន័យ...</td></tr>
+                    </tbody>
+                </table>
+            </div>
         </div>
-
-        <div class="form-group">
-            <label for="phoneNumber">លេខទូរស័ព្ទ / Group / Chat ID (ជម្រើសបន្ថែម):</label>
-            <input type="text" id="phoneNumber" name="phoneNumber" placeholder="ឧទាហរណ៍៖ 85512345678 ឬ Chat ID">
-        </div>
-
-        <div class="form-group">
-            <label for="message">ខ្លឹមសារសារ (Message):</label>
-            <textarea id="message" name="message" rows="4" placeholder="វាយអត្ថបទសារទីនេះ..."></textarea>
-        </div>
-
-       <div class="form-group">
-            <label for="images">ភ្ជាប់រូបភាព ឬ វីដេអូ (Images & Videos - Optional):</label>
-            <input type="file" id="images" name="images" accept="image/*,video/*" multiple>
-        </div>
-
-        <div class="form-group">
-            <label for="scheduleTime">ម៉ោងត្រូវផ្ញើ (កំណត់ពេល Schedule):</label>
-            <input type="datetime-local" id="scheduleTime" name="scheduleTime">
-        </div>
-
-        <!-- 🔄 Checkbox សម្រាប់ជ្រើសរើសផ្ញើស្វ័យប្រវត្តិរាល់ថ្ងៃ -->
-        <div class="form-group" style="display: flex; align-items: center; gap: 10px; background: #f8fafc; padding: 12px; border-radius: 8px; border: 1.5px solid #cbd5e1;">
-            <input type="checkbox" id="isDaily" name="isDaily" value="true" style="width: 20px; height: 20px; cursor: pointer;">
-            <label for="isDaily" style="margin-bottom: 0; cursor: pointer; color: #0f172a; font-weight: 600;">
-                🔄 ផ្ញើស្វ័យប្រវត្តិរាល់ថ្ងៃ (Daily Auto-Send)
-            </label>
-        </div>
-
-        <div class="btn-group">
-            <button type="button" id="btnSend" class="btn-send" onclick="submitForm('/api/notify/send')">
-                🚀 ផ្ញើភ្លាមៗ (Send Now)
-            </button>
-            <button type="button" id="btnSchedule" class="btn-schedule" onclick="handleScheduleSubmit()">
-                ⏰ កំណត់ពេល (Schedule)
-            </button>
-            <button type="button" id="btnCancel" class="btn-cancel" onclick="resetForm()">
-                ✖ បោះបង់ការកែប្រែ
-            </button>
-        </div>
-    </form>
-
-    <div id="alert"></div>
-</div>
-
-<!-- 📊 តារាងបង្ហាញបញ្ជីសារកំណត់ពេល -->
-<div class="container">
-    <h3>បញ្ជីសារដែលបានកំណត់ពេល (Scheduled Messages)</h3>
-    <div class="table-responsive">
-        <table>
-            <thead>
-                <tr>
-                    <th>Channel</th>
-                    <th>ឈ្មោះគ្រុប / Chat ID</th>
-                    <th>សារ</th>
-                    <th>ម៉ោងផ្ញើ</th>
-                    <th>ស្ថានភាព</th>
-                    <th>សកម្មភាព</th>
-                </tr>
-            </thead>
-            <tbody id="scheduleTableBody">
-                <tr><td colspan="6" style="text-align:center;">កំពុងទាញយកទិន្នន័យ...</td></tr>
-            </tbody>
-        </table>
     </div>
 </div>
 
@@ -295,7 +342,7 @@
             const result = await response.json();
 
             if (result.success) {
-                showAlert(result.message, true);
+                showAlert('បានរក្សាទុក Group ថ្មីដោយជោគជ័យ!', true);
                 document.getElementById('newGroupName').value = '';
                 document.getElementById('newGroupId').value = '';
                 loadGroups(); 
@@ -337,6 +384,25 @@
         }
     }
 
+    async function selectAllGroups() {
+        try {
+            const res = await fetch('/api/groups');
+            const data = await res.json();
+            
+            if (data.success && data.groups && data.groups.length > 0) {
+                const allGroupIds = data.groups.map(group => group.id).join(',');
+                document.getElementById('phoneNumber').value = allGroupIds;
+                document.getElementById('channel').value = 'broadcast';
+                showAlert(`បានទាញយក Chat ID គ្រុបសរុបចំនួន ${data.groups.length} មកដាក់បញ្ចូលគ្នាដោយជោគជ័យ!`, true);
+            } else {
+                showAlert('រកមិនឃើញគ្រុបណាមួយត្រូវបានរក្សាទុកក្នុងប្រព័ន្ធទេ!', false);
+            }
+        } catch (err) {
+            console.error('Error:', err);
+            showAlert('មានបញ្ហាក្នុងការទាញយកបញ្ជីគ្រុប!', false);
+        }
+    }
+
     async function loadSchedules() {
         try {
             const res = await fetch('/api/schedules');
@@ -364,7 +430,7 @@
                     <tr>
                         <td><strong>${item.channel.toUpperCase()}</strong>${dailyBadgeHtml}</td>
                         <td>${displayRecipient}</td>
-                        <td>${item.message || '[រូបភាព]'}</td>
+                        <td>${item.message || '[Media]'}</td>
                         <td>${dateStr}</td>
                         <td><span class="badge ${badgeClass}">${item.status}</span></td>
                         <td>
@@ -422,16 +488,13 @@
         if (!scheduleVal) return;
 
         const dateObj = new Date(scheduleVal);
-        
         const day = String(dateObj.getDate()).padStart(2, '0');
         const month = String(dateObj.getMonth() + 1).padStart(2, '0');
         const year = dateObj.getFullYear();
-        
         const hours = String(dateObj.getHours()).padStart(2, '0');
         const minutes = String(dateObj.getMinutes()).padStart(2, '0');
 
         const formattedDate = `${day}-${month}-${year} ម៉ោង ${hours}:${minutes}`;
-
         const messageBox = document.getElementById('message');
         messageBox.value = `សូមជម្រាបជូន ព័ត៌មានបើកគ្រុប​នឹងត្រូវផ្ញើនៅថ្ងៃ ${formattedDate}។`;
     });
@@ -506,7 +569,7 @@
         document.getElementById('isDaily').checked = false;
         document.getElementById('formTitle').textContent = 'Notification Hub (Telegram / LINE / WhatsApp)';
         document.getElementById('btnSend').style.display = 'inline-flex';
-        document.getElementById('btnSchedule').textContent = '⏰ កំណត់ពេល (Schedule)';
+        document.getElementById('btnSchedule').textContent = '⏰ កំណត់ពេល';
         document.getElementById('btnCancel').style.display = 'none';
     }
 
@@ -520,3 +583,4 @@
 
 </body>
 </html>
+```[cite: 4, 6]

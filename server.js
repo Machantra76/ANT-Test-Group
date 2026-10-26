@@ -88,10 +88,11 @@ cloudinary.config({
     api_secret: process.env.CLOUDINARY_API_SECRET
 });
 
+// 🌟 បន្ថែម resource_type: 'auto' ដើម្បីឱ្យ Cloudinary ទទួលទាំង Image និង Video ស្វ័យប្រវត្តិ
 async function uploadImageToHosting(buffer) {
     return new Promise((resolve, reject) => {
         const uploadStream = cloudinary.uploader.upload_stream(
-            { folder: 'notification_hub' },
+            { folder: 'notification_hub', resource_type: 'auto' },
             (error, result) => {
                 if (error) {
                     console.error('❌ [Cloudinary Upload Error]:', error.message);
@@ -136,7 +137,7 @@ async function sendNotification(channel, recipient, message, imagesArray) {
                 const imgObj = imagesArray[i];
                 const buffer = imgObj.buffer?.type === 'Buffer' ? Buffer.from(imgObj.buffer.data) : (imgObj.buffer || imgObj);
                 const mimetype = imgObj.mimetype || 'image/jpeg';
-                const ext = mimetype.split('/')[1] || 'jpg';
+                const ext = mimetype.split('/')[1] || (mimetype.includes('video') ? 'mp4' : 'jpg');
                 
                 const tempFilePath = path.join(__dirname, `temp_${Date.now()}_${i}.${ext}`);
                 fs.writeFileSync(tempFilePath, buffer);
@@ -156,13 +157,18 @@ async function sendNotification(channel, recipient, message, imagesArray) {
                         }
                         if (tempFilePaths.length > 0) {
                             for (const fileObj of tempFilePaths) {
-                                await telegramBot.sendPhoto(targetId, fileObj.path);
+                                // 🌟 ឆែកប្រភេទ file ប្រសិនបើជា video ឱ្យប្រើ sendVideo បើមិនដូច្នោះទេប្រើ sendPhoto
+                                if (fileObj.mimetype && fileObj.mimetype.startsWith('video/')) {
+                                    await telegramBot.sendVideo(targetId, fileObj.path);
+                                } else {
+                                    await telegramBot.sendPhoto(targetId, fileObj.path);
+                                }
                             }
                         }
-                        await saveLog('Telegram', targetId, message || '[Photos]', 'Success');
+                        await saveLog('Telegram', targetId, message || '[Media]', 'Success');
                     } catch (singleErr) {
                         console.error(`❌ [Telegram Error for ID ${targetId}]:`, singleErr.message);
-                        await saveLog('Telegram', targetId, message || '[Photos]', `Failed: ${singleErr.message}`);
+                        await saveLog('Telegram', targetId, message || '[Media]', `Failed: ${singleErr.message}`);
                     }
                 }
             }
@@ -188,11 +194,20 @@ async function sendNotification(channel, recipient, message, imagesArray) {
                 for (const fileObj of tempFilePaths) {
                     const publicUrl = await uploadImageToHosting(fileObj.buffer);
                     if (publicUrl) {
-                        messages.push({
-                            type: 'image',
-                            originalContentUrl: publicUrl,
-                            previewImageUrl: publicUrl
-                        });
+                        // 🌟 ឆែកប្រភេទ file ប្រសិនបើជា video ឱ្យបន្ថែម type ជា video របស់ LINE
+                        if (fileObj.mimetype && fileObj.mimetype.startsWith('video/')) {
+                            messages.push({
+                                type: 'video',
+                                originalContentUrl: publicUrl,
+                                previewImageUrl: publicUrl
+                            });
+                        } else {
+                            messages.push({
+                                type: 'image',
+                                originalContentUrl: publicUrl,
+                                previewImageUrl: publicUrl
+                            });
+                        }
                     }
                 }
             }
@@ -201,11 +216,11 @@ async function sendNotification(channel, recipient, message, imagesArray) {
                 for (const targetId of targetLineIds) {
                     try {
                         await lineClient.pushMessage(targetId, messages);
-                        await saveLog('LINE', targetId, message || '[Photos]', 'Success');
-                        console.log(`✅ [LINE Success] បានផ្ញើសារនិងរូបភាពទៅកាន់ Target ID: ${targetId}`);
+                        await saveLog('LINE', targetId, message || '[Media]', 'Success');
+                        console.log(`✅ [LINE Success] បានផ្ញើសារនិង Media ទៅកាន់ Target ID: ${targetId}`);
                     } catch (lineApiErr) {
                         console.error(`❌ [LINE API Error details for ${targetId}]:`, lineApiErr.originalError?.response?.data || lineApiErr.message);
-                        await saveLog('LINE', targetId, message || '[Photos]', `Failed: ${lineApiErr.message}`);
+                        await saveLog('LINE', targetId, message || '[Media]', `Failed: ${lineApiErr.message}`);
                     }
                 }
             }
@@ -288,7 +303,7 @@ app.post('/api/notify/send', upload.array('images', 10), async (req, res) => {
         })) : [];
 
         await sendNotification(channel, recipient, message, imagesArray);
-        res.json({ success: true, message: 'បានបញ្ជូនសារនិងរូបភាពដោយជោគជ័យ!' });
+        res.json({ success: true, message: 'បានបញ្ជូនសារនិង Media ដោយជោគជ័យ!' });
     } catch (err) {
         console.error('❌ [API Send Error]:', err.message);
         res.status(500).json({ success: false, error: err.message });

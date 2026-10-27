@@ -294,8 +294,20 @@ async function processPendingSchedules() {
 
 app.get('/api/run-cron', async (req, res) => {
     try {
+        // 🌟 ឆែកម៉ោងបច្ចុប្បន្នរបស់ Server (UTC) និងម៉ោងនៅស្រុកយើង (GMT+7)
+        const nowUTC = new Date();
+        const localTimeStr = nowUTC.toLocaleString('en-GB', { timeZone: 'Asia/Phnom_Penh' });
+        
+        console.log(`⏰ [Cron Triggered] Server UTC Time: ${nowUTC.toISOString()}`);
+        console.log(`🇰🇭 [Cron Triggered] Local (Phnom Penh) Time: ${localTimeStr}`);
+
         const result = await processPendingSchedules();
-        res.json({ success: true, message: `Cron executed. Processed: ${result.count}` });
+        res.json({ 
+            success: true, 
+            serverTimeUTC: nowUTC.toISOString(),
+            localTimePhnomPenh: localTimeStr,
+            message: `Cron executed. Processed: ${result.count}` 
+        });
     } catch (err) {
         res.status(500).json({ success: false, error: err.message });
     }

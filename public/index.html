@@ -48,7 +48,10 @@
             gap: 25px;
         }
 
+        /* 🌟 កូដសម្រាប់ដាក់ Logo Telegram នៅ *ខាងក្នុង* ប្រអប់ទាំងបីផ្ទាល់ (Watermark) */
         .container { 
+            position: relative; /* ឱ្យកូនៗនៅខាងក្នុងអាចតម្រៀបតាម */
+            overflow: hidden;   /* កុំឱ្យរូប Logo ធំហៀរចេញក្រៅប្រអប់ */
             width: 100%;
             background: #ffffff; 
             padding: 30px 25px; 
@@ -56,6 +59,30 @@
             box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.08); 
             border: 2px solid #3b82f6;
             transition: all 0.3s ease;
+        }
+
+        /* 🌟 Telegram Watermark Logo នៅចំកណ្តាលខាងក្នុងប្រអប់ */
+        .container::before {
+            content: "";
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 320px;  /* ទំហំរូប Logo ធំល្មមពេញប្រអប់ */
+            height: 320px;
+            background-image: url('https://upload.wikimedia.org/wikipedia/commons/8/82/Telegram_logo.svg');
+            background-repeat: no-repeat;
+            background-position: center;
+            background-size: contain;
+            opacity: 0.05; /* 👈 មលៗស្អាត (5%) មិនបាំងអត្ថបទ */
+            pointer-events: none; /* មិនឱ្យរារាំងពេលចុចលើ Form */
+            z-index: 0;
+        }
+
+        /* ធានាថា Form និងមាតិកាទាំងអស់នៅពីលើ Logo ជានិច្ច */
+        .container > * {
+            position: relative;
+            z-index: 1;
         }
 
         .container:hover {
@@ -583,4 +610,3 @@
 
 </body>
 </html>
-

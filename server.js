@@ -248,7 +248,7 @@ async function processPendingSchedules() {
             let imagesArray = item.images_data ? JSON.parse(item.images_data) : [];
             let messageToSend = item.message || '';
 
-           if (item.is_daily) {
+         if (item.is_daily) {
                 const scheduleDate = new Date(item.schedule_time);
                 
                 // 🌟 បំប្លែងទៅជាម៉ោងក្នុងស្រុក (Asia/Phnom_Penh / GMT+7) យ៉ាងត្រឹមត្រូវ
@@ -266,7 +266,9 @@ async function processPendingSchedules() {
                 });
 
                 const formattedDateStr = `${day}-${month}-${year} ម៉ោង ${hours}:${minutes}`;
-                messageToSend = messageToSend.replace(/\d{2}-\d{2}-\d{4} ម៉ោង \s*\d{2}:\d{2}/g, formattedDateStr);
+                
+                // 🌟 កែតម្រូវ Regex ថ្មីឱ្យកាន់តែទូលំទូលាយ ដើម្បីធានាថាវាចាប់ដូរថ្ងៃខែបានគ្រប់ករណី
+                messageToSend = messageToSend.replace(/\d{2}-\d{2}-\d{4}[\sម៉ោង]+\d{2}:\d{2}/g, formattedDateStr);
             }
             
             await sendNotification(item.channel, item.recipient, messageToSend, imagesArray);

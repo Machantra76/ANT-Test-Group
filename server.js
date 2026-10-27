@@ -248,16 +248,25 @@ async function processPendingSchedules() {
             let imagesArray = item.images_data ? JSON.parse(item.images_data) : [];
             let messageToSend = item.message || '';
 
-            if (item.is_daily) {
+           if (item.is_daily) {
                 const scheduleDate = new Date(item.schedule_time);
-                const day = String(scheduleDate.getDate()).padStart(2, '0');
-                const month = String(scheduleDate.getMonth() + 1).padStart(2, '0');
-                const year = scheduleDate.getFullYear();
-                const hours = String(scheduleDate.getHours()).padStart(2, '0');
-                const minutes = String(scheduleDate.getMinutes()).padStart(2, '0');
+                
+                // 🌟 បំប្លែងទៅជាម៉ោងក្នុងស្រុក (Asia/Phnom_Penh / GMT+7) យ៉ាងត្រឹមត្រូវ
+                const options = { timeZone: 'Asia/Phnom_Penh', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false };
+                const formatter = new Intl.DateTimeFormat('en-GB', options);
+                const parts = formatter.formatToParts(scheduleDate);
+                
+                let day, month, year, hours, minutes;
+                parts.forEach(p => {
+                    if (p.type === 'day') day = p.value;
+                    if (p.type === 'month') month = p.value;
+                    if (p.type === 'year') year = p.value;
+                    if (p.type === 'hour') hours = p.value;
+                    if (p.type === 'minute') minutes = p.value;
+                });
 
                 const formattedDateStr = `${day}-${month}-${year} ម៉ោង ${hours}:${minutes}`;
-                messageToSend = messageToSend.replace(/\d{2}-\d{2}-\d{4} ម៉ោង \d{2}:\d{2}/g, formattedDateStr);
+                messageToSend = messageToSend.replace(/\d{2}-\d{2}-\d{4} ម៉ោង \s*\d{2}:\d{2}/g, formattedDateStr);
             }
             
             await sendNotification(item.channel, item.recipient, messageToSend, imagesArray);

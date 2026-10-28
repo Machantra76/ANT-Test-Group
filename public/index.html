@@ -18,11 +18,38 @@
         body { 
             background: linear-gradient(135deg, #f0f4f8 0%, #e2e8f0 100%); 
             margin: 0; 
-            padding: 30px 15px; 
+            padding: 0 15px 30px 15px; 
             min-height: 100vh;
             display: flex;
             flex-direction: column;
             align-items: center;
+        }
+
+        /* 🌟 Navbar / Header Banner ពណ៌ទឹកបិច */
+        .app-banner {
+            width: 100%;
+            background: linear-gradient(135deg, #1e40af 0%, #3b82f6 100%);
+            color: white;
+            padding: 25px 20px;
+            text-align: center;
+            box-shadow: 0 4px 15px rgba(30, 64, 175, 0.2);
+            margin-bottom: 30px;
+            border-bottom-left-radius: 16px;
+            border-bottom-right-radius: 16px;
+        }
+
+        .app-banner h1 {
+            margin: 0 0 5px 0;
+            font-size: 24px;
+            font-weight: 700;
+        }
+
+        .app-banner p {
+            margin: 0;
+            font-size: 14px;
+            opacity: 0.9;
+            font-family: 'Inter', sans-serif;
+            letter-spacing: 0.5px;
         }
 
         /* 🌟 ຈັດ Layout បែងចែកជា 2 Column (ឆ្វេង និង ស្តាំ) */
@@ -102,7 +129,7 @@
             box-shadow: 0 4px 12px rgba(16, 185, 129, 0.15);
             display: flex;
             flex-direction: column;
-            height: 420px; /* 👈 កែតម្រូវកម្ពស់ត្រឹមនេះដើម្បីកុំឱ្យវាវែងជ្រុលចុះក្រោម */
+            height: 420px; 
         }
 
         .schedule-card .table-responsive {
@@ -241,6 +268,12 @@
     </style>
 </head>
 <body>
+
+    <!-- 🌟 Banner ខាងលើបង្អស់ -->
+    <div class="app-banner">
+        <h1>ប្រព័ន្ធគ្រប់គ្រងសារ Telegram និង LINE</h1>
+        <p>Telegram & LINE Message Management System</p>
+    </div>
 
 <div class="main-layout">
     <!-- 👈 ផ្នែកខាងឆ្វេង៖ Notification Hub -->

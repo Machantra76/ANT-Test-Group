@@ -50,8 +50,8 @@
 
         /* 🌟 កូដសម្រាប់ដាក់ Logo Telegram នៅ *ខាងក្នុង* ប្រអប់ទាំងបីផ្ទាល់ (Watermark) */
         .container { 
-            position: relative; /* ឱ្យកូនៗនៅខាងក្នុងអាចតម្រៀបតាម */
-            overflow: hidden;   /* កុំឱ្យរូប Logo ធំហៀរចេញក្រៅប្រអប់ */
+            position: relative; 
+            overflow: hidden;   
             width: 100%;
             background: #ffffff; 
             padding: 30px 25px; 
@@ -61,25 +61,23 @@
             transition: all 0.3s ease;
         }
 
-        /* 🌟 Telegram Watermark Logo នៅចំកណ្តាលខាងក្នុងប្រអប់ */
         .container::before {
             content: "";
             position: absolute;
             top: 50%;
             left: 50%;
             transform: translate(-50%, -50%);
-            width: 320px;  /* ទំហំរូប Logo ធំល្មមពេញប្រអប់ */
+            width: 320px;  
             height: 320px;
             background-image: url('https://upload.wikimedia.org/wikipedia/commons/8/82/Telegram_logo.svg');
             background-repeat: no-repeat;
             background-position: center;
             background-size: contain;
-            opacity: 0.05; /* 👈 មលៗស្អាត (5%) មិនបាំងអត្ថបទ */
-            pointer-events: none; /* មិនឱ្យរារាំងពេលចុចលើ Form */
+            opacity: 0.05; 
+            pointer-events: none; 
             z-index: 0;
         }
 
-        /* ធានាថា Form និងមាតិកាទាំងអស់នៅពីលើ Logo ជានិច្ច */
         .container > * {
             position: relative;
             z-index: 1;
@@ -89,17 +87,36 @@
             box-shadow: 0 15px 30px -5px rgba(59, 130, 246, 0.15);
         }
 
-        /* 🌟 Modern Card for Group Creation (Highlighted Frame 2) */
+        /* 🌟 Modern Card for Group Creation */
         .group-card {
             background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
             border: 2px solid #8b5cf6;
             box-shadow: 0 4px 12px rgba(139, 92, 246, 0.15);
         }
 
-        /* 🌟 Highlight Scheduled Messages Container (Highlighted Frame 3) */
+        /* 🌟 Highlight Scheduled Messages Container - កែសម្រួលកម្ពស់ឱ្យស្អាតនិងមាន Scroll */
         .schedule-card {
             border: 2px solid #10b981;
             box-shadow: 0 4px 12px rgba(16, 185, 129, 0.15);
+            display: flex;
+            flex-direction: column;
+            max-height: 580px; 
+        }
+
+        .schedule-card .table-responsive {
+            width: 100%;
+            overflow-y: auto;  
+            overflow-x: auto;  
+            max-height: 450px; 
+            border-radius: 8px;
+            border: 1px solid #e2e8f0;
+        }
+
+        .schedule-card th {
+            position: sticky;
+            top: 0;
+            background-color: #f1f5f9;
+            z-index: 2;
         }
 
         h2, h3 { 
@@ -171,8 +188,7 @@
         .btn-cancel:hover { background: #475569; }
 
         /* Table Styling */
-        .table-responsive { width: 100%; overflow-x: auto; }
-        table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 14px; }
+        table { width: 100%; border-collapse: collapse; font-size: 14px; }
         th, td { padding: 12px 10px; text-align: left; border-bottom: 1px solid #e2e8f0; vertical-align: middle; }
         th { background-color: #f1f5f9; color: #334155; font-weight: 700; }
 
@@ -224,7 +240,7 @@
 <body>
 
 <div class="main-layout">
-    <!-- 👈 ផ្នែកខាងឆ្វេង៖ Notification Hub (Frame 1) -->
+    <!-- 👈 ផ្នែកខាងឆ្វេង៖ Notification Hub -->
     <div class="left-column">
         <div class="container">
             <h2 id="formTitle">Notification Hub (TELEGRAM / LINE)</h2>
@@ -297,7 +313,7 @@
         </div>
     </div>
 
-    <!-- 👉 ផ្នែកខាងស្តាំ៖ បង្កើត Group (Frame 2) និង បញ្ជីសារកំណត់ពេល (Frame 3) តម្រៀបលើក្រោមគ្នា -->
+    <!-- 👉 ផ្នែកខាងស្តាំ -->
     <div class="right-column">
         <!-- 🌟 Frame 2: បង្កើត Group ឬ Chat ID ថ្មី -->
         <div class="container group-card">
@@ -321,9 +337,9 @@
             </div>
         </div>
 
-        <!-- 🌟 Frame 3: បញ្ជីសារដែលបានកំណត់ពេល (Scheduled Messages) -->
+        <!-- 🌟 Frame 3: បញ្ជីសារដែលបានកំណត់ពេល (Scheduled Messages) - ស្អាត មាន Scrollbar កម្រិតស្មើ -->
         <div class="container schedule-card">
-            <h3 style="color: #059669;">📊 បញ្ជីសារដែលបានកំណត់ពេល (Scheduled Messages)</h3>
+            <h3 style="color: #059669; margin-bottom: 12px;">📊 បញ្ជីសារដែលបានកំណត់ពេល (Scheduled Messages)</h3>
             <div class="table-responsive">
                 <table>
                     <thead>
@@ -593,8 +609,9 @@
     function resetForm() {
         document.getElementById('notifyForm').reset();
         document.getElementById('editId').value = '';
+        document.getElementById('isGradeChecked'] = false;
         document.getElementById('isDaily').checked = false;
-        document.getElementById('formTitle').textContent = 'Notification Hub (Telegram / LINE / WhatsApp)';
+        document.getElementById('formTitle').textContent = 'Notification Hub (TELEGRAM / LINE)';
         document.getElementById('btnSend').style.display = 'inline-flex';
         document.getElementById('btnSchedule').textContent = '⏰ កំណត់ពេល';
         document.getElementById('btnCancel').style.display = 'none';

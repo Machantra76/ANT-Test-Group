@@ -32,7 +32,7 @@
             gap: 25px;
             width: 100%;
             max-width: 1350px;
-            align-items: flex-start;
+            align-items: stretch; /* កែតម្រឹមឱ្យកម្ពស់ស្មើគ្នា */
         }
 
         .left-column {
@@ -41,12 +41,15 @@
             flex-direction: column;
         }
 
+        .left-column > .container {
+            height: 100%; /* កំណត់ឱ្យប្រអប់ខាងឆ្វេងលាតពេញកម្ពស់ */
+        }
+
         .right-column {
             flex: 1.8;
             display: flex;
             flex-direction: column;
             gap: 20px;
-            height: fit-content;
         }
 
         /* 🌟 កូដសម្រាប់ដាក់ Logo Telegram នៅ *ខាងក្នុង* ប្រអប់ទាំងបីផ្ទាល់ (Watermark) */
@@ -96,13 +99,14 @@
             padding: 20px;
         }
 
-        /* 🌟 Highlight Scheduled Messages Container - កែសម្រួលកម្ពស់ឱ្យវែងស្មើខាងឆ្វេងល្មមស្អាត (575px) */
+        /* 🌟 Highlight Scheduled Messages Container */
         .schedule-card {
             border: 2px solid #10b981;
             box-shadow: 0 4px 12px rgba(16, 185, 129, 0.15);
             display: flex;
             flex-direction: column;
-            height: 575px; /* 👈 កែតម្រូវកម្ពស់ឱ្យស្មើប្រអប់ខាងឆ្វេងប្រាកដ */
+            flex: 1; /* រីកធំស្វ័យប្រវត្តិដើម្បីស្មើកម្ពស់ប្រអប់ខាងឆ្វេង */
+            min-height: 350px;
         }
 
         .schedule-card .table-responsive {

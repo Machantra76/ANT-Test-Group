@@ -96,13 +96,13 @@
             padding: 20px;
         }
 
-        /* 🌟 Highlight Scheduled Messages Container - កែសម្រួលកម្ពស់ឱ្យសមស្របមិនអោយឃ្លារធំពេក */
+        /* 🌟 Highlight Scheduled Messages Container - កែសម្រួលកម្ពស់ឱ្យវែងស្មើខាងឆ្វេងល្មមស្អាត (575px) */
         .schedule-card {
             border: 2px solid #10b981;
             box-shadow: 0 4px 12px rgba(16, 185, 129, 0.15);
             display: flex;
             flex-direction: column;
-            height: 490px; /* ឱ្យស្មើនិងកម្ពស់ប្រអប់ខាងឆ្វេងល្មម */
+            height: 575px; /* 👈 កែតម្រូវកម្ពស់ឱ្យស្មើប្រអប់ខាងឆ្វេងប្រាកដ */
         }
 
         .schedule-card .table-responsive {
@@ -189,9 +189,9 @@
         .btn-cancel { background: #64748b; display: none; }
         .btn-cancel:hover { background: #475569; }
 
-        /* Table Styling - បង្រួម Padding ក្នុង Cell ឱ្យសង្ហា មិនដក់ឃ្លារធំពេក */
+        /* Table Styling */
         table { width: 100%; border-collapse: collapse; font-size: 13px; }
-        th, td { padding: 8px 10px; text-align: left; border-bottom: 1px solid #e2e8f0; vertical-align: middle; }
+        th, td { padding: 9px 10px; text-align: left; border-bottom: 1px solid #e2e8f0; vertical-align: middle; }
         th { background-color: #f1f5f9; color: #334155; font-weight: 700; }
 
         .badge { padding: 3px 6px; border-radius: 6px; font-size: 11px; font-weight: 600; display: inline-block; }
@@ -597,7 +597,7 @@
 
         try {
             const res = await fetch(`/api/schedules/${id}`, { method: 'DELETE' });
-            const result = res.json();
+            const result = await res.json();
             if (result.success) {
                 showAlert(result.message, true);
                 loadSchedules();

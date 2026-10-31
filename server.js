@@ -266,6 +266,15 @@ async function processPendingSchedules() {
                 });
 
                 const formattedDateStr = `${day}-${month}-${year} ម៉ោង ${hours}:${minutes}`;
+             // 🌟 Self-Ping ដើម្បីការពារកុំឱ្យ Render Free Tier ចូលទៅកាន់ដំណាក់កាល Sleep បណ្តោះអាសន្ន
+const RENDER_EXTERNAL_URL = process.env.RENDER_EXTERNAL_URL; // Render ផ្ដល់ជូនស្វ័យប្រវត្តិ
+if (RENDER_EXTERNAL_URL) {
+    setInterval(() => {
+        axios.get(`${RENDER_EXTERNAL_URL}/api/run-cron`)
+            .then(() => console.log('🔄 [Self-Ping] Server triggered successfully!'))
+            .catch(err => console.error('⚠️ [Self-Ping Error]:', err.message));
+    }, 10 * 60 * 1000); // រៀងរាល់ ១០ នាទីម្ដង
+}
                 
                 // 🌟 កែតម្រូវ Regex ថ្មីឱ្យកាន់តែទូលំទូលាយ ដើម្បីធានាថាវាចាប់ដូរថ្ងៃខែបានគ្រប់ករណី
                 messageToSend = messageToSend.replace(/\d{2}-\d{2}-\d{4}[\sម៉ោង]+\d{2}:\d{2}/g, formattedDateStr);

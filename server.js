@@ -88,7 +88,6 @@ cloudinary.config({
     api_secret: process.env.CLOUDINARY_API_SECRET
 });
 
-// 🌟 បន្ថែម resource_type: 'auto' ដើម្បីឱ្យ Cloudinary ទទួលទាំង Image និង Video ស្វ័យប្រវត្តិ
 async function uploadImageToHosting(buffer) {
     return new Promise((resolve, reject) => {
         const uploadStream = cloudinary.uploader.upload_stream(
@@ -147,7 +146,8 @@ async function sendNotification(channel, recipient, message, imagesArray) {
 
         if (channel === 'telegram' || channel === 'broadcast') {
             const rawTargets = recipient || process.env.TELEGRAM_GROUP_CHAT_ID || '';
-            const targetIds = rawTargets.split(',').map(id => id.trim()).filter(id => id.length > 0);
+            // 🌟 ការពារកុំឱ្យ ID ស្ទួនគ្នា
+            const targetIds = [...new Set(rawTargets.split(',').map(id => id.trim()).filter(id => id.length > 0))];
 
             if (telegramBot && targetIds.length > 0) {
                 for (const targetId of targetIds) {
@@ -157,7 +157,6 @@ async function sendNotification(channel, recipient, message, imagesArray) {
                         }
                         if (tempFilePaths.length > 0) {
                             for (const fileObj of tempFilePaths) {
-                                // 🌟 ឆែកប្រភេទ file ប្រសិនបើជា video ឱ្យប្រើ sendVideo បើមិនដូច្នោះទេប្រើ sendPhoto
                                 if (fileObj.mimetype && fileObj.mimetype.startsWith('video/')) {
                                     await telegramBot.sendVideo(targetId, fileObj.path);
                                 } else {
@@ -176,7 +175,8 @@ async function sendNotification(channel, recipient, message, imagesArray) {
 
         if (channel === 'line' || channel === 'broadcast') {
             const rawTargets = recipient || process.env.LINE_USER_ID || '';
-            const targetLineIds = rawTargets.split(',').map(id => id.trim()).filter(id => id.length > 0);
+            // 🌟 ការពារកុំឱ្យ ID ស្ទួនគ្នា
+            const targetLineIds = [...new Set(rawTargets.split(',').map(id => id.trim()).filter(id => id.length > 0))];
             
             if (!lineClient) {
                 throw new Error('LINE Client មិនទាន់ត្រូវបានកំណត់ cấu hình!');
@@ -194,7 +194,6 @@ async function sendNotification(channel, recipient, message, imagesArray) {
                 for (const fileObj of tempFilePaths) {
                     const publicUrl = await uploadImageToHosting(fileObj.buffer);
                     if (publicUrl) {
-                        // 🌟 ឆែកប្រភេទ file ប្រសិនបើជា video ឱ្យបន្ថែម type ជា video របស់ LINE
                         if (fileObj.mimetype && fileObj.mimetype.startsWith('video/')) {
                             messages.push({
                                 type: 'video',
@@ -248,10 +247,9 @@ async function processPendingSchedules() {
             let imagesArray = item.images_data ? JSON.parse(item.images_data) : [];
             let messageToSend = item.message || '';
 
-         if (item.is_daily) {
+            if (item.is_daily) {
                 const scheduleDate = new Date(item.schedule_time);
                 
-                // 🌟 បំប្លែងទៅជាម៉ោងក្នុងស្រុក (Asia/Phnom_Penh / GMT+7) យ៉ាងត្រឹមត្រូវ
                 const options = { timeZone: 'Asia/Phnom_Penh', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false };
                 const formatter = new Intl.DateTimeFormat('en-GB', options);
                 const parts = formatter.formatToParts(scheduleDate);
@@ -266,17 +264,7 @@ async function processPendingSchedules() {
                 });
 
                 const formattedDateStr = `${day}-${month}-${year} ម៉ោង ${hours}:${minutes}`;
-             // 🌟 Self-Ping ដើម្បីការពារកុំឱ្យ Render Free Tier ចូលទៅកាន់ដំណាក់កាល Sleep បណ្តោះអាសន្ន
-const RENDER_EXTERNAL_URL = process.env.RENDER_EXTERNAL_URL; // Render ផ្ដល់ជូនស្វ័យប្រវត្តិ
-if (RENDER_EXTERNAL_URL) {
-    setInterval(() => {
-        axios.get(`${RENDER_EXTERNAL_URL}/api/run-cron`)
-            .then(() => console.log('🔄 [Self-Ping] Server triggered successfully!'))
-            .catch(err => console.error('⚠️ [Self-Ping Error]:', err.message));
-    }, 10 * 60 * 1000); // រៀងរាល់ ១០ នាទីម្ដង
-}
                 
-                // 🌟 កែតម្រូវ Regex ថ្មីឱ្យកាន់តែទូលំទូលាយ ដើម្បីធានាថាវាចាប់ដូរថ្ងៃខែបានគ្រប់ករណី
                 messageToSend = messageToSend.replace(/\d{2}-\d{2}-\d{4}[\sម៉ោង]+\d{2}:\d{2}/g, formattedDateStr);
             }
             
@@ -305,7 +293,6 @@ if (RENDER_EXTERNAL_URL) {
 
 app.get('/api/run-cron', async (req, res) => {
     try {
-        // 🌟 ឆែកម៉ោងបច្ចុប្បន្នរបស់ Server (UTC) និងម៉ោងនៅស្រុកយើង (GMT+7)
         const nowUTC = new Date();
         const localTimeStr = nowUTC.toLocaleString('en-GB', { timeZone: 'Asia/Phnom_Penh' });
         
@@ -456,4 +443,16 @@ app.get('/api/logs', async (req, res) => {
 
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 
-app.listen(PORT, '0.0.0.0', () => console.log(`🚀 Server កំពុងរត់លើ http://localhost:${PORT}`));
+app.listen(PORT, '0.0.0.0', () => {
+    console.log(`🚀 Server កំពុងរត់លើ http://localhost:${PORT}`);
+
+    // 🌟 ដាក់ Self-Ping នៅខាងក្រោមបង្អស់ ដើម្បីឱ្យវាដំណើរការតែ ១ ដងគត់ កុំឱ្យមានបញ្ហាស្ទួនការរត់ Cron
+    const RENDER_EXTERNAL_URL = process.env.RENDER_EXTERNAL_URL;
+    if (RENDER_EXTERNAL_URL) {
+        setInterval(() => {
+            axios.get(`${RENDER_EXTERNAL_URL}/api/run-cron`)
+                .then(() => console.log('🔄 [Self-Ping] Server triggered successfully!'))
+                .catch(err => console.error('⚠️ [Self-Ping Error]:', err.message));
+        }, 10 * 60 * 1000); // រៀងរាល់ ១០ នាទីម្ដង
+    }
+});
